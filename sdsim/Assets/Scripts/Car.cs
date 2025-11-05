@@ -208,7 +208,7 @@ public class Car : MonoBehaviour, ICar{
 		lastSteer = requestSteering;
 		lastAccel = requestTorque;
 		prevVel = velocity;
-		velocity = transform.InverseTransformDirection(rb.velocity);
+		velocity = transform.InverseTransformDirection(rb.linearVelocity);
 		acceleration = (velocity - prevVel)/Time.deltaTime;
 		gyro = rb.angularVelocity;
 		rotation = rb.rotation;

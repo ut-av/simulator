@@ -53,7 +53,7 @@ public class UnityStandardCarAdapter : MonoBehaviour, ICar {
 
 	public Vector3 GetVelocity()
 	{
-		return rb.velocity;
+		return rb.linearVelocity;
 	}
 
 	public Vector3 GetAccel() { return accel; }
@@ -97,7 +97,7 @@ public class UnityStandardCarAdapter : MonoBehaviour, ICar {
 			rb.rotation = rot;
 			transform.position = pos;
 			transform.rotation = rot;
-			rb.velocity = Vector3.zero;
+			rb.linearVelocity = Vector3.zero;
 			rb.angularVelocity = Vector3.zero;
 
 			numIter--;
@@ -107,8 +107,8 @@ public class UnityStandardCarAdapter : MonoBehaviour, ICar {
 
 	private void FixedUpdate()
 	{
-		accel = rb.velocity - vel;
-		vel = rb.velocity;
+		accel = rb.linearVelocity - vel;
+		vel = rb.linearVelocity;
 
 		unityCar.Move(steering / MaximumSteerAngle, throttle, footBrake, handBrake);
 		gyro = rb.angularVelocity;
