@@ -406,7 +406,7 @@ public class Localizer : MonoBehaviour
 
 	void SenseEnv(int iMoveX, int iMoveZ)
 	{
-		Marker[] allMarkers = GameObject.FindObjectsOfType<Marker>();
+		Marker[] allMarkers = GameObject.FindObjectsByType<Marker>(FindObjectsSortMode.None);
 		Vector3 pos = transform.position;
 		Measurements ma = new Measurements();
 		ma.Init(100);

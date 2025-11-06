@@ -6,7 +6,7 @@ public class RaceCamera : MonoBehaviour
 {
     RaceCameras raceCameras;
     public CameraTrigger cameraTrigger;
-    public Camera camera;
+    public new Camera camera;
     public int index;
 
     void Awake()

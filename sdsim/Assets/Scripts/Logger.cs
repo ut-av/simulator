@@ -148,7 +148,7 @@ public class Logger : MonoBehaviour {
             }
 		}
 
-        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+        Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
         GameObject go = CarSpawner.getChildGameObject(canvas.gameObject, "LogCount");
         if (go != null)
             logDisplay = go.GetComponent<Text>();

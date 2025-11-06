@@ -11,7 +11,7 @@ public class LocationMarker : MonoBehaviour {
 		int closest = -1;
 		float dist = float.PositiveInfinity;
 
-		var markers = GameObject.FindObjectsOfType<LocationMarker>();
+		var markers = GameObject.FindObjectsByType<LocationMarker>(FindObjectsSortMode.None);
 
 		foreach(var marker in markers)
 		{

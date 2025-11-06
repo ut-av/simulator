@@ -80,7 +80,10 @@ public class UnityMainThreadDispatcher : MonoBehaviour {
 	void Awake() {
 		if (_instance == null) {
 			_instance = this;
-			DontDestroyOnLoad(this.gameObject);
+			// DontDestroyOnLoad must be called on a root GameObject. If this component
+			// is on a child, use the root GameObject to avoid Unity's warning.
+			GameObject root = this.gameObject.transform.root.gameObject;
+			DontDestroyOnLoad(root);
 		}
 	}
 

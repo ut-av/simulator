@@ -26,9 +26,9 @@ public class TrainingManager : MonoBehaviour
         if (car == null)
             Debug.LogError("TrainingManager needs car object");
 
-        roadBuilder = GameObject.FindObjectOfType<RoadBuilder>();
-        pathManager = GameObject.FindObjectOfType<PathManager>();
-		carSpawner = GameObject.FindObjectOfType<CarSpawner>();
+        roadBuilder = GameObject.FindFirstObjectByType<RoadBuilder>();
+        pathManager = GameObject.FindFirstObjectByType<PathManager>();
+		carSpawner = GameObject.FindFirstObjectByType<CarSpawner>();
     }
 
     // Use this for initialization

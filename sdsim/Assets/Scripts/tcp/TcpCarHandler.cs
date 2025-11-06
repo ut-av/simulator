@@ -43,9 +43,11 @@ namespace tk
 
         int iActiveSpan = 0;
 
-        bool asynchronous = true;
         float time_step = 0.1f;
-        bool bResetCar = false;
+    bool bResetCar = false;
+    // If true the simulation runs in asynchronous mode (normal Unity time).
+    // If false the simulation runs in synchronous (step) mode and Time.timeScale
+    // is set to 0.0 so the client can step the simulation manually.
         bool bExitScene = false;
 
         public enum State
@@ -60,9 +62,9 @@ namespace tk
         {
             car = carObj.GetComponent<ICar>();
             conf = carObj.GetComponent<CarConfig>();
-            pm = GameObject.FindObjectOfType<PathManager>();
-            carSpawner = GameObject.FindObjectOfType<CarSpawner>();
-            Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+            pm = GameObject.FindFirstObjectByType<PathManager>();
+            carSpawner = GameObject.FindFirstObjectByType<CarSpawner>();
+            Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
             GameObject go = CarSpawner.getChildGameObject(canvas.gameObject, "AISteering");
             if (go != null)
                 ai_text = go.GetComponent<Text>();
@@ -291,8 +293,8 @@ namespace tk
 
         IEnumerator RegenRoad(int road_style, int rand_seed, float turn_increment)
         {
-            TrainingManager train_mgr = GameObject.FindObjectOfType<TrainingManager>();
-            PathManager path_mgr = GameObject.FindObjectOfType<PathManager>();
+            TrainingManager train_mgr = GameObject.FindFirstObjectByType<TrainingManager>();
+            PathManager path_mgr = GameObject.FindFirstObjectByType<PathManager>();
 
             if (train_mgr != null)
             {
@@ -480,14 +482,12 @@ namespace tk
             if (step_mode == "synchronous")
             {
                 Debug.Log("setting mode to synchronous");
-                asynchronous = false;
                 this.time_step = _time_step;
                 Time.timeScale = 0.0f;
             }
             else
             {
                 Debug.Log("setting mode to asynchronous");
-                asynchronous = true;
             }
         }
 

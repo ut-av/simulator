@@ -101,7 +101,7 @@ public class SandboxServer : MonoBehaviour
     {
         if (privateAPI) // private API client server
         {
-            PrivateAPI privateAPIHandler = GameObject.FindObjectOfType<PrivateAPI>();
+            PrivateAPI privateAPIHandler = GameObject.FindFirstObjectByType<PrivateAPI>();
             if (privateAPIHandler != null)
             {
                 if (_server.debug)
@@ -115,7 +115,7 @@ public class SandboxServer : MonoBehaviour
         {
             if (spawnCarswClients) // we are on in a track scene
             {
-                CarSpawner spawner = GameObject.FindObjectOfType<CarSpawner>();
+                CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
                 if (spawner != null)
                 {
                     if (_server.debug)
@@ -127,7 +127,7 @@ public class SandboxServer : MonoBehaviour
             else //we are in the menu
             {
 
-                tk.TcpMenuHandler handler = GameObject.FindObjectOfType<TcpMenuHandler>();
+                tk.TcpMenuHandler handler = GameObject.FindFirstObjectByType<TcpMenuHandler>();
                 if (handler != null)
                 {
                     if (_server.debug)
@@ -156,7 +156,7 @@ public class SandboxServer : MonoBehaviour
 
         if (GlobalState.paceCar && !bFrontEnd) // && clients.Count == 0
         {
-            CarSpawner spawner = GameObject.FindObjectOfType<CarSpawner>();
+            CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
             if (spawner)
             {
                 spawner.EnsureOneCar();
@@ -171,7 +171,7 @@ public class SandboxServer : MonoBehaviour
         }
         else
         {
-            CarSpawner spawner = GameObject.FindObjectOfType<CarSpawner>();
+            CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
             if (spawner)
             {
                 spawner.RemoveCar(client.gameObject.GetComponent<tk.JsonTcpClient>());

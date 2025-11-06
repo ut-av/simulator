@@ -4,6 +4,8 @@ public class DontDestroy : MonoBehaviour
 {
     void Awake()
     {
-        DontDestroyOnLoad(this.gameObject);
+        // Ensure we call DontDestroyOnLoad on the root GameObject to avoid Unity warning
+        GameObject root = this.gameObject.transform.root.gameObject;
+        DontDestroyOnLoad(root);
     }
 }

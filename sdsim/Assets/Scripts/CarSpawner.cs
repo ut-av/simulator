@@ -421,8 +421,8 @@ public class CarSpawner : MonoBehaviour
 
         ///////////////////////////////////////////////
         // Search scene to find these.
-        MenuHandler menuHandler = GameObject.FindObjectOfType<MenuHandler>();
-        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+        MenuHandler menuHandler = GameObject.FindFirstObjectByType<MenuHandler>();
+        Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
         GameObject panelMenu = getChildGameObject(canvas.gameObject, "Panel Menu");
         GameObject pidPanel = getChildGameObject(canvas.gameObject, "PIDPanel");
         ///////////////////////////////////////////////
@@ -492,8 +492,8 @@ public class CarSpawner : MonoBehaviour
         ///////////////////////////////////////////////
         // Search scene to find these.
         CameraFollow cameraFollow = cam.transform.GetComponent<CameraFollow>();
-        MenuHandler menuHandler = GameObject.FindObjectOfType<MenuHandler>();
-        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+        MenuHandler menuHandler = GameObject.FindFirstObjectByType<MenuHandler>();
+        Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
         GameObject panelMenu = getChildGameObject(canvas.gameObject, "Panel Menu");
         PID_UI pid_ui = null;
         GameObject pidPanel = getChildGameObject(canvas.gameObject, "PIDPanel");

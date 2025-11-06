@@ -70,7 +70,7 @@ public class DomeProjection : MonoBehaviour
                 Destroy(m_cubeRT);
 
             m_cubeRT = new RenderTexture(cubeMapSize, cubeMapSize, 24, RenderTextureFormat.ARGB32);
-            m_cubeRT.isCubemap = true;
+            m_cubeRT.dimension = UnityEngine.Rendering.TextureDimension.Cube;
             m_cubeRT.Create();            
         }  
             

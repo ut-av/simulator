@@ -109,7 +109,9 @@ public class TerrainToolkit : MonoBehaviour {
 	public float windSmoothing = 0.25f;
 	
 	// Texturing...
+	#pragma warning disable CS0618 // Type or member is obsolete
 	public SplatPrototype[] splatPrototypes;
+	#pragma warning restore CS0618 // Type or member is obsolete
 	public Texture2D tempTexture;
 	public float slopeBlendMinAngle = 60.0f;
 	public float slopeBlendMaxAngle = 75.0f;
@@ -1685,7 +1687,9 @@ public class TerrainToolkit : MonoBehaviour {
 			return;
 		}
 		TerrainData terData = ter.terrainData;
+		#pragma warning disable CS0618 // Type or member is obsolete
 		splatPrototypes = terData.splatPrototypes;
+		#pragma warning restore CS0618 // Type or member is obsolete
 		int nTextures = splatPrototypes.Length;
 		if (nTextures < 2) {
 			Debug.LogError("Error: You must assign at least 2 textures.");
@@ -1849,9 +1853,11 @@ public class TerrainToolkit : MonoBehaviour {
 	}
 	
 	public void addSplatPrototype(Texture2D tex, int index) {
+		#pragma warning disable CS0618 // Type or member is obsolete
 		SplatPrototype[] newSplatPrototypes = new SplatPrototype[index + 1];
 		for (int i = 0; i <= index; i++) {
 			newSplatPrototypes[i] = new SplatPrototype();
+			#pragma warning restore CS0618 // Type or member is obsolete
 			if (i == index) {
 				newSplatPrototypes[i].texture = tex;
 				newSplatPrototypes[i].tileSize = new Vector2(15, 15);
@@ -1869,11 +1875,13 @@ public class TerrainToolkit : MonoBehaviour {
 	public void deleteSplatPrototype(Texture2D tex, int index) {
 		int c = 0;
 		c = splatPrototypes.Length;
+		#pragma warning disable CS0618 // Type or member is obsolete
 		SplatPrototype[] newSplatPrototypes = new SplatPrototype[c - 1];
 		int n = 0;
 		for (int i = 0; i < c; i++) {
 			if (i != index) {
 				newSplatPrototypes[n] = new SplatPrototype();
+				#pragma warning restore CS0618 // Type or member is obsolete
 				newSplatPrototypes[n].texture = splatPrototypes[i].texture;
 				newSplatPrototypes[n].tileSize = splatPrototypes[i].tileSize;
 				n++;
@@ -1886,7 +1894,9 @@ public class TerrainToolkit : MonoBehaviour {
 	}
 	
 	public void deleteAllSplatPrototypes() {
+		#pragma warning disable CS0618 // Type or member is obsolete
 		SplatPrototype[] newSplatPrototypes = new SplatPrototype[0];
+		#pragma warning restore CS0618 // Type or member is obsolete
 		splatPrototypes = newSplatPrototypes;
 	}
 	
@@ -2470,7 +2480,9 @@ public class TerrainToolkit : MonoBehaviour {
 		}
 		Terrain ter = (Terrain) GetComponent(typeof(Terrain));
 		TerrainData terData = ter.terrainData;
+		#pragma warning disable CS0618 // Type or member is obsolete
 		splatPrototypes = terData.splatPrototypes;
+		#pragma warning restore CS0618 // Type or member is obsolete
 		deleteAllSplatPrototypes();
 		int n = 0;
 		foreach (Texture2D tex in textures) {
@@ -2484,7 +2496,9 @@ public class TerrainToolkit : MonoBehaviour {
 			heightBlendPoints[n] = stop;
 			n++;
 		}
-		terData.splatPrototypes = splatPrototypes;
+	#pragma warning disable CS0618 // Type or member is obsolete
+	terData.splatPrototypes = splatPrototypes;
+	#pragma warning restore CS0618 // Type or member is obsolete
 		TextureProgressDelegate textureProgressDelegate = new TextureProgressDelegate(dummyTextureProgress);
 		textureTerrain(textureProgressDelegate);
 	}

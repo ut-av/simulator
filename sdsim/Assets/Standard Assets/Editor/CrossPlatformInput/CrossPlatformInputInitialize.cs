@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Build;
 
 namespace UnityStandardAssets.CrossPlatformInput.Inspector
 {
@@ -125,14 +126,16 @@ namespace UnityStandardAssets.CrossPlatformInput.Inspector
                     }
                 }
                 string definesString = string.Join(";", defines.ToArray());
-                PlayerSettings.SetScriptingDefineSymbolsForGroup(group, definesString);
+                var namedBuildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(group);
+                PlayerSettings.SetScriptingDefineSymbols(namedBuildTarget, definesString);
             }
         }
 
 
         private static List<string> GetDefinesList(BuildTargetGroup group)
         {
-            return new List<string>(PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';'));
+            var namedBuildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(group);
+            return new List<string>(PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget).Split(';'));
         }
     }
 }

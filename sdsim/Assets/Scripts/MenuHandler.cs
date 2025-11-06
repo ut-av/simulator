@@ -18,7 +18,7 @@ public class MenuHandler : MonoBehaviour {
     public void Awake()
     {
         //auto link
-        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+        Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
         menuPanel = getChildGameObject(canvas.gameObject, "Panel Menu");
         stopPanel = getChildGameObject(canvas.gameObject, "StopPanel");
         exitPanel = getChildGameObject(canvas.gameObject, "ExitPanel");
@@ -91,7 +91,7 @@ public class MenuHandler : MonoBehaviour {
         stopPanel.SetActive(true);
         exitPanel.SetActive(false);
 
-        CarSpawner spawner = GameObject.FindObjectOfType<CarSpawner>();
+        CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
 
         if (spawner)
             spawner.RemoveGhostCars();
@@ -162,7 +162,7 @@ public class MenuHandler : MonoBehaviour {
         stopPanel.SetActive(false);
         exitPanel.SetActive(true);
 
-        CarSpawner spawner = GameObject.FindObjectOfType<CarSpawner>();
+        CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
 
         if (spawner)
             spawner.EnsureOneCar();

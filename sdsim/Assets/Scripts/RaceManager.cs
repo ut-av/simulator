@@ -20,7 +20,7 @@ public class RaceManager : MonoBehaviour
 
     public void StartRace()
     {
-        Timer[] timers = GameObject.FindObjectsOfType<Timer>();
+        Timer[] timers = GameObject.FindObjectsByType<Timer>(FindObjectsSortMode.None);
         foreach(Timer t in timers)
         {
             t.StartTimer();
@@ -33,7 +33,7 @@ public class RaceManager : MonoBehaviour
 
     public void StopRace()
     {
-        Timer[] timers = GameObject.FindObjectsOfType<Timer>();
+        Timer[] timers = GameObject.FindObjectsByType<Timer>(FindObjectsSortMode.None);
         foreach(Timer t in timers)
         {
             t.DisableTimer();
@@ -46,7 +46,7 @@ public class RaceManager : MonoBehaviour
 
     public void Split()
     {   
-        Timer[] timers = GameObject.FindObjectsOfType<Timer>();
+        Timer[] timers = GameObject.FindObjectsByType<Timer>(FindObjectsSortMode.None);
         foreach(Timer t in timers)
         {
             t.SplitTime();
@@ -59,7 +59,7 @@ public class RaceManager : MonoBehaviour
 
     public void Continue()
     {
-        Timer[] timers = GameObject.FindObjectsOfType<Timer>();
+        Timer[] timers = GameObject.FindObjectsByType<Timer>(FindObjectsSortMode.None);
         foreach(Timer t in timers)
         {
             t.ContinueTime();

@@ -11,7 +11,7 @@ public class ColCone : MonoBehaviour
 
     void Start()
     {
-        privateAPI = GameObject.FindObjectOfType<PrivateAPI>();
+        privateAPI = GameObject.FindFirstObjectByType<PrivateAPI>();
     }
 
     void OnTriggerEnter(Collider col)

@@ -50,12 +50,12 @@ public class PIDController : MonoBehaviour
     void Awake()
     {
         car = carObj.GetComponent<ICar>();
-        pm = GameObject.FindObjectOfType<PathManager>();
+        pm = GameObject.FindFirstObjectByType<PathManager>();
 
         if (pm == null)
             Debug.LogWarning("couldn't get PathManager reference");
 
-        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+        Canvas canvas = GameObject.FindFirstObjectByType<Canvas>();
         GameObject go = CarSpawner.getChildGameObject(canvas.gameObject, "PIDSteering");
         if (go != null)
             pid_steering = go.GetComponent<Text>();
@@ -131,7 +131,7 @@ public class PIDController : MonoBehaviour
         {
             if (looping)
             {
-                var foundObjects = FindObjectsOfType<Logger>();
+                var foundObjects = FindObjectsByType<Logger>(FindObjectsSortMode.None);
 
                 foreach (var logger in foundObjects)
                     logger.lapCounter++;

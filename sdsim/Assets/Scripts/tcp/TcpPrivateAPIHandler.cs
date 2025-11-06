@@ -14,7 +14,7 @@ namespace tk
 
         void Awake()
         {
-            pathManager = GameObject.FindObjectOfType<PathManager>();
+            pathManager = GameObject.FindFirstObjectByType<PathManager>();
         }
 
         public void Init(tk.JsonTcpClient _client)
@@ -54,7 +54,7 @@ namespace tk
         {
             if (isVerified)
             {
-                if (pathManager == null) { pathManager = GameObject.FindObjectOfType<PathManager>(); }
+                if (pathManager == null) { pathManager = GameObject.FindFirstObjectByType<PathManager>(); }
 
                 int new_seed;
                 int.TryParse(json.GetField("seed").str, out new_seed);

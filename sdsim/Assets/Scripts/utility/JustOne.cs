@@ -9,7 +9,7 @@ public class JustOne : MonoBehaviour
 
     void Awake()
     {
-        JustOne[] all_objs = GameObject.FindObjectsOfType<JustOne>();
+        JustOne[] all_objs = GameObject.FindObjectsByType<JustOne>(FindObjectsSortMode.None);
 
         List<JustOne> objs = new List<JustOne>();
         
@@ -31,6 +31,9 @@ public class JustOne : MonoBehaviour
             }
         }
 
-        DontDestroyOnLoad(this.gameObject);
+        // DontDestroyOnLoad must be called on a root GameObject. If this component
+        // is attached to a child, use the root GameObject to avoid Unity's warning.
+        GameObject root = this.gameObject.transform.root.gameObject;
+        DontDestroyOnLoad(root);
     }
 }

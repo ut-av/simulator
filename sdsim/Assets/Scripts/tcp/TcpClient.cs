@@ -148,7 +148,7 @@ namespace tk
                         System.Text.Encoding encoding = System.Text.Encoding.Default;
                         _clientSocket.Send(encoding.GetBytes(msg));
                     }
-                    catch(SocketException e)
+                    catch(SocketException)
                     {
                         Debug.LogWarning("connection dropped.");
                         dropped = true;
@@ -166,7 +166,7 @@ namespace tk
             {
                 recieved = _clientSocket.EndReceive(AR);
             }
-            catch(SocketException e)
+            catch(SocketException)
             {
                 recieved = 0;
                 dropped = true;

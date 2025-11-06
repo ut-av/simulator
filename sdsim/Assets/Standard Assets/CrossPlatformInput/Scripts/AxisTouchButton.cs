@@ -31,25 +31,23 @@ namespace UnityStandardAssets.CrossPlatformInput
 			FindPairedButton();
 		}
 
-		void FindPairedButton()
-		{
-			// find the other button witch which this button should be paired
-			// (it should have the same axisName)
-			var otherAxisButtons = FindObjectsOfType(typeof(AxisTouchButton)) as AxisTouchButton[];
+	void FindPairedButton()
+	{
+		// find the other button witch which this button should be paired
+		// (it should have the same axisName)
+		var otherAxisButtons = FindObjectsByType(typeof(AxisTouchButton), FindObjectsSortMode.None) as AxisTouchButton[];
 
-			if (otherAxisButtons != null)
+		if (otherAxisButtons != null)
+		{
+			for (int i = 0; i < otherAxisButtons.Length; i++)
 			{
-				for (int i = 0; i < otherAxisButtons.Length; i++)
+				if (otherAxisButtons[i].axisName == axisName && otherAxisButtons[i] != this)
 				{
-					if (otherAxisButtons[i].axisName == axisName && otherAxisButtons[i] != this)
-					{
-						m_PairedWith = otherAxisButtons[i];
-					}
+					m_PairedWith = otherAxisButtons[i];
 				}
 			}
 		}
-
-		void OnDisable()
+	}		void OnDisable()
 		{
 			// The object is disabled so remove it from the cross platform input system
 			m_Axis.Remove();
