@@ -1,11 +1,9 @@
 ﻿using UnityEngine;
-using System.Collections;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Text;
-using System.Collections.Generic;
 
 namespace tk
 {   
@@ -40,11 +38,28 @@ namespace tk
         // Verbose messages
         public bool debug = false;
 
+        // Store the bound host and port to sync with GlobalState
+        private string boundHost = "";
+        private int boundPort = 0;
+
+        // Public properties to access bound host and port
+        public string BoundHost => boundHost;
+        public int BoundPort => boundPort;
+
         // Call the Run method to start the server. The ip address is typically 127.0.0.1 to accept only local connections.
         // Or 0.0.0.0 to bind to all incoming connections for this NIC.
         public void Run(string ip, int port)
         {
+            boundHost = ip;
+            boundPort = port;
+            
+            // Update GlobalState with the requested host and port
+            GlobalState.host = ip;
+            GlobalState.port = port;
+            
             Bind(ip, port);
+
+            Debug.Log("Listening on " + ip + ":" + port.ToString());
 
             // Poll for new connections in the ListenLoop
             thread = new Thread(ListenLoop);
@@ -179,6 +194,9 @@ namespace tk
                     if (currentPort != originalPort)
                     {
                         Debug.Log($"Port {originalPort} was in use. Server Listening on: {ip}:{currentPort}");
+                        // Update GlobalState with the actual bound port
+                        GlobalState.port = currentPort;
+                        boundPort = currentPort;
                     }
                     else
                     {

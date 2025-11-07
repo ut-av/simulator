@@ -297,4 +297,46 @@ public class SandboxServer : MonoBehaviour
 
         GameObject.Destroy(client.gameObject);
     }
+
+    private void OnGUI()
+    {
+        // Display host and port from GlobalState in the top right corner
+        string displayText = $"Host: {GlobalState.host}\nPort: {GlobalState.port}";
+        
+        // Create a style for the panel
+        GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
+        panelStyle.padding = new RectOffset(10, 10, 10, 10);
+        panelStyle.alignment = TextAnchor.UpperLeft;
+        
+        // Create a style for the text
+        GUIStyle textStyle = new GUIStyle(GUI.skin.label);
+        textStyle.fontSize = 14;
+        textStyle.fontStyle = FontStyle.Bold;
+        textStyle.normal.textColor = Color.white;
+        
+        // Calculate the size of the text
+        GUIContent content = new GUIContent(displayText);
+        Vector2 textSize = textStyle.CalcSize(content);
+        
+        // Position in the top right corner with some padding
+        float padding = 10f;
+        Rect panelRect = new Rect(
+            Screen.width - textSize.x - 40,
+            padding,
+            textSize.x + 20,
+            textSize.y + 20
+        );
+        
+        // Draw the background panel
+        GUI.Box(panelRect, "", panelStyle);
+        
+        // Draw the text inside the panel
+        Rect textRect = new Rect(
+            panelRect.x + 10,
+            panelRect.y + 10,
+            textSize.x,
+            textSize.y
+        );
+        GUI.Label(textRect, displayText, textStyle);
+    }
 }
