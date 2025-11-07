@@ -9,9 +9,11 @@ public class SceneLoaded : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        // Notify unified SandboxServer
         SandboxServer server = GameObject.FindFirstObjectByType<SandboxServer>();
-
-        if (server)
+        if (server != null)
+        {
             server.OnSceneLoaded(inFrontEnd);
+        }
     }    
 }

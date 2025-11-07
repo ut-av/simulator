@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8851192297964007757}
   - component: {fileID: 8851192297964007754}
   - component: {fileID: 8851192297964007756}
+  - component: {fileID: 6149332761926030836}
   m_Layer: 0
   m_Name: Server
   m_TagString: Untagged
@@ -26,12 +27,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8851192297964007752}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &8851192297964007757
 MonoBehaviour:
@@ -63,8 +65,6 @@ MonoBehaviour:
   clientTemplateObj: {fileID: 3689066714662374667, guid: 4cf6249cb0357574fb5b276a96d9c2b6,
     type: 3}
   spawn_pt: {fileID: 8851192297964007755}
-  spawnCarswClients: 1
-  privateAPI: 0
 --- !u!114 &8851192297964007756
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -78,3 +78,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   label: SandboxServer
+--- !u!114 &6149332761926030836
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8851192297964007752}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30f0e79a3e3287e64a0ef97d0def8c5b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CommandLineArgsHandler

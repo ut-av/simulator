@@ -35,16 +35,21 @@ namespace tk
         {
             if (GlobalState.sceneNames == null)
             {
-                try
+                // Only try to load from StreamingAssets in edit mode
+                // In builds, scenes should be loaded directly via SceneManager
+                if (Application.isEditor)
                 {
-                    bundleAssetScenePaths = loader.LoadScenePathsFromFile(GlobalState.additionnalContentPath);
-                    if (bundleAssetScenePaths != null) // Add those paths to the scene names
+                    try
                     {
-                        scene_names.AddRange(bundleAssetScenePaths);
-                    }
+                        bundleAssetScenePaths = loader.LoadScenePathsFromFile(GlobalState.additionnalContentPath);
+                        if (bundleAssetScenePaths != null) // Add those paths to the scene names
+                        {
+                            scene_names.AddRange(bundleAssetScenePaths);
+                        }
 
+                    }
+                    catch (Exception e) { Debug.LogError(e); }
                 }
-                catch (Exception e) { Debug.LogError(e); }
 
                 GlobalState.sceneNames = scene_names.ToArray();
 

@@ -6,6 +6,10 @@ using System.Net;
 using System.Net.Sockets;
 using System;
 
+/// <summary>
+/// Unified Sandbox Server - Handles Track API and Menu API simultaneously on a single port.
+/// Routes clients to Track API or Menu API based on their message patterns.
+/// </summary>
 [RequireComponent(typeof(tk.TcpServer))]
 public class SandboxServer : MonoBehaviour
 {
@@ -16,41 +20,41 @@ public class SandboxServer : MonoBehaviour
 
     public GameObject clientTemplateObj = null;
     public Transform spawn_pt;
-    public bool spawnCarswClients = true;
-    public bool privateAPI = false;
+    
     bool argHost = false;
     bool argPort = false;
+
+    // Track which clients are using which API
+    private Dictionary<tk.TcpClient, ClientAPIType> clientAPITypes = new Dictionary<tk.TcpClient, ClientAPIType>();
+
+    private enum ClientAPIType
+    {
+        Unknown,
+        TrackAPI,
+        MenuAPI
+    }
 
     public void CheckCommandLineConnectArgs()
     {
         string[] args = System.Environment.GetCommandLineArgs();
 
-
-        if (!privateAPI)
+        for (int i = 0; i < args.Length; i++)
         {
-            for (int i = 0; i < args.Length; i++)
+            if (args[i] == "--host")
             {
-                if (args[i] == "--host")
-                {
-                    host = args[i + 1];
-                    argHost = true;
-                }
-                else if (args[i] == "--port")
-                {
-                    port = int.Parse(args[i + 1]);
-                    argPort = true;
-                }
+                host = args[i + 1];
+                argHost = true;
             }
+            else if (args[i] == "--port")
+            {
+                port = int.Parse(args[i + 1]);
+                argPort = true;
+            }
+            // Note: --scene/--environment is handled by CommandLineArgsHandler component
         }
 
         if (argHost == false) { host = GlobalState.host; }
         if (argPort == false) { port = GlobalState.port; }
-        
-        if (privateAPI)
-        {
-            port = GlobalState.portPrivateAPI;
-        }
-
     }
 
     private void Awake()
@@ -63,7 +67,9 @@ public class SandboxServer : MonoBehaviour
     {
         CheckCommandLineConnectArgs();
 
-        Debug.Log("SDSandbox Server starting.");
+        Debug.Log($"Unified Sandbox Server starting on {host}:{port}");
+        Debug.Log("Supports: Track API and Menu API simultaneously");
+        
         _server.onClientConntedCB += new tk.TcpServer.OnClientConnected(OnClientConnected);
         _server.onClientDisconntedCB += new tk.TcpServer.OnClientDisconnected(OnClientDisconnected);
 
@@ -76,12 +82,12 @@ public class SandboxServer : MonoBehaviour
     {
         if (clientTemplateObj == null)
         {
-            Debug.LogError("client template object was null.");
+            Debug.LogError("Sandbox Server: client template object was null.");
             return null;
         }
 
         if (_server.debug)
-            Debug.Log("creating client obj");
+            Debug.Log("Sandbox Server: creating client obj");
 
         GameObject go = GameObject.Instantiate(clientTemplateObj) as GameObject;
 
@@ -92,6 +98,7 @@ public class SandboxServer : MonoBehaviour
 
         tk.TcpClient client = go.GetComponent<tk.TcpClient>();
 
+        // Initialize client with routing capability
         InitClient(client);
 
         return client;
@@ -99,62 +106,165 @@ public class SandboxServer : MonoBehaviour
 
     private void InitClient(tk.TcpClient client)
     {
-        if (privateAPI) // private API client server
+        tk.JsonTcpClient jsonClient = client.gameObject.GetComponent<tk.JsonTcpClient>();
+        if (jsonClient == null)
         {
-            PrivateAPI privateAPIHandler = GameObject.FindFirstObjectByType<PrivateAPI>();
-            if (privateAPIHandler != null)
-            {
-                if (_server.debug)
-                    Debug.Log("init private API handler.");
-
-                privateAPIHandler.Init(client.gameObject.GetComponent<tk.JsonTcpClient>());
-            }
+            Debug.LogError("Sandbox Server: JsonTcpClient component not found on client template.");
+            return;
         }
 
-        else // normal client server
+        // Mark client as unknown initially - will be determined by first message
+        clientAPITypes[client] = ClientAPIType.Unknown;
+
+        // Register routing handlers that will determine the API type based on first message
+        // These handlers will initialize the appropriate API handler, which will then register its own handlers
+        jsonClient.dispatchInMainThread = true; // Need main thread for routing decisions
+        
+        // Menu API routing - these messages uniquely identify Menu API clients
+        jsonClient.dispatcher.Register("load_scene", new tk.Delegates.OnMsgRecv((json) => RouteToMenuAPI(client, json)));
+        jsonClient.dispatcher.Register("get_scene_names", new tk.Delegates.OnMsgRecv((json) => RouteToMenuAPI(client, json)));
+        
+        // Track API routing - these messages uniquely identify Track API clients
+        jsonClient.dispatcher.Register("control", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("reset_car", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("exit_scene", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("step_mode", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("regen_road", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("car_config", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("cam_config", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("cam_config_b", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("lidar_config", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("set_position", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        jsonClient.dispatcher.Register("node_position", new tk.Delegates.OnMsgRecv((json) => RouteToTrackAPI(client, json)));
+        
+        // Handle ambiguous messages that could be from Menu or Track API
+        // We'll route based on scene context
+        jsonClient.dispatcher.Register("get_protocol_version", new tk.Delegates.OnMsgRecv((json) => RouteAmbiguousMessage(client, json)));
+        jsonClient.dispatcher.Register("quit_app", new tk.Delegates.OnMsgRecv((json) => RouteAmbiguousMessage(client, json)));
+        jsonClient.dispatcher.Register("connected", new tk.Delegates.OnMsgRecv((json) => RouteAmbiguousMessage(client, json)));
+    }
+    
+    private void RouteAmbiguousMessage(tk.TcpClient client, JSONObject json)
+    {
+        // For ambiguous messages, check if we've already determined the API type
+        if (clientAPITypes.ContainsKey(client) && clientAPITypes[client] != ClientAPIType.Unknown)
         {
-            if (spawnCarswClients) // we are on in a track scene
+            return; // Already routed, let the API handler process it
+        }
+        
+        // Try to determine based on scene context
+        CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
+        tk.TcpMenuHandler menuHandler = GameObject.FindFirstObjectByType<tk.TcpMenuHandler>();
+        
+        if (spawner != null && menuHandler == null)
+        {
+            // Track scene - route to Track API (it will re-dispatch)
+            RouteToTrackAPI(client, json);
+        }
+        else if (menuHandler != null && spawner == null)
+        {
+            // Menu scene - route to Menu API (it will re-dispatch)
+            RouteToMenuAPI(client, json);
+        }
+        else
+        {
+            // Both or neither - default to Track API if spawner exists, otherwise Menu
+            if (spawner != null)
             {
-                CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
-                if (spawner != null)
-                {
-                    if (_server.debug)
-                        Debug.Log("spawning car.");
-
-                    spawner.Spawn(client.gameObject.GetComponent<tk.JsonTcpClient>(), false);
-                }
+                RouteToTrackAPI(client, json);
             }
-            else //we are in the menu
+            else if (menuHandler != null)
             {
-
-                tk.TcpMenuHandler handler = GameObject.FindFirstObjectByType<TcpMenuHandler>();
-                if (handler != null)
-                {
-                    if (_server.debug)
-                        Debug.Log("init menu handler.");
-
-                    handler.Init(client.gameObject.GetComponent<tk.JsonTcpClient>());
-                }
+                RouteToMenuAPI(client, json);
             }
         }
     }
 
+    private void RouteToMenuAPI(tk.TcpClient client, JSONObject json)
+    {
+        if (clientAPITypes.ContainsKey(client) && clientAPITypes[client] != ClientAPIType.Unknown)
+        {
+            return; // Already routed
+        }
+        
+        clientAPITypes[client] = ClientAPIType.MenuAPI;
+        
+        if (_server.debug)
+            Debug.Log("Sandbox Server: Routing client to Menu API");
+
+        // Initialize Menu API handler - it will register its own handlers
+        tk.TcpMenuHandler menuHandler = GameObject.FindFirstObjectByType<tk.TcpMenuHandler>();
+        if (menuHandler != null)
+        {
+            tk.JsonTcpClient jsonClient = client.gameObject.GetComponent<tk.JsonTcpClient>();
+            menuHandler.Init(jsonClient);
+            
+            // Re-dispatch the message so the API handler can process it
+            string msgType = json.GetField("msg_type").str;
+            jsonClient.dispatcher.Dipatch(msgType, json);
+        }
+        else
+        {
+            Debug.LogWarning("Sandbox Server: TcpMenuHandler not found in scene.");
+        }
+    }
+
+    private void RouteToTrackAPI(tk.TcpClient client, JSONObject json)
+    {
+        if (clientAPITypes.ContainsKey(client) && clientAPITypes[client] != ClientAPIType.Unknown)
+        {
+            return; // Already routed
+        }
+        
+        clientAPITypes[client] = ClientAPIType.TrackAPI;
+        
+        if (_server.debug)
+            Debug.Log("Sandbox Server: Routing client to Track API");
+
+        // Initialize Track API handler (spawn car) - TcpCarHandler will register its own handlers
+        CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
+        if (spawner != null)
+        {
+            tk.JsonTcpClient jsonClient = client.gameObject.GetComponent<tk.JsonTcpClient>();
+            spawner.Spawn(jsonClient, false);
+            
+            // Re-dispatch the message so the API handler can process it
+            // Note: Car spawning is asynchronous, so handlers may not be registered yet
+            // But the message will be processed once handlers are registered
+            string msgType = json.GetField("msg_type").str;
+            jsonClient.dispatcher.Dipatch(msgType, json);
+        }
+        else
+        {
+            Debug.LogWarning("Sandbox Server: CarSpawner not found in scene. Track API clients need a track scene.");
+        }
+    }
 
     public void OnSceneLoaded(bool bFrontEnd)
     {
-        spawnCarswClients = !bFrontEnd;
-
+        // Reinitialize Track API clients when scene loads
         List<tk.TcpClient> clients = _server.GetClients();
 
         foreach (tk.TcpClient client in clients)
         {
-            if (_server.debug)
-                Debug.Log("init network client.");
+            if (clientAPITypes.ContainsKey(client) && clientAPITypes[client] == ClientAPIType.TrackAPI)
+            {
+                if (_server.debug)
+                    Debug.Log("Sandbox Server: Reinitializing Track API client.");
 
-            InitClient(client);
+                CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
+                if (spawner != null)
+                {
+                    tk.JsonTcpClient jsonClient = client.gameObject.GetComponent<tk.JsonTcpClient>();
+                    if (jsonClient != null)
+                    {
+                        spawner.Spawn(jsonClient, false);
+                    }
+                }
+            }
         }
 
-        if (GlobalState.paceCar && !bFrontEnd) // && clients.Count == 0
+        if (GlobalState.paceCar && !bFrontEnd)
         {
             CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
             if (spawner)
@@ -166,17 +276,25 @@ public class SandboxServer : MonoBehaviour
 
     public void OnClientDisconnected(tk.TcpClient client)
     {
-        if (privateAPI)
+        // Clean up based on API type
+        if (clientAPITypes.ContainsKey(client))
         {
-        }
-        else
-        {
-            CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
-            if (spawner)
+            if (clientAPITypes[client] == ClientAPIType.TrackAPI)
             {
-                spawner.RemoveCar(client.gameObject.GetComponent<tk.JsonTcpClient>());
+                CarSpawner spawner = GameObject.FindFirstObjectByType<CarSpawner>();
+                if (spawner != null)
+                {
+                    tk.JsonTcpClient jsonClient = client.gameObject.GetComponent<tk.JsonTcpClient>();
+                    if (jsonClient != null)
+                    {
+                        spawner.RemoveCar(jsonClient);
+                    }
+                }
             }
+            
+            clientAPITypes.Remove(client);
         }
+
         GameObject.Destroy(client.gameObject);
     }
 }

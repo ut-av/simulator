@@ -154,17 +154,66 @@ namespace tk
         private void Bind(string ip, int port)
         {
             IPAddress ipAddress = IPAddress.Parse(ip);
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, port);
+            int originalPort = port;
+            int currentPort = port;
+            bool bound = false;
+            const int maxAttempts = 100; // Prevent infinite loop
+            int attempts = 0;
 
-            // Create a TCP/IP socket.  
-            listener = new Socket(ipAddress.AddressFamily,
-                SocketType.Stream, ProtocolType.Tcp);
+            while (!bound && attempts < maxAttempts)
+            {
+                try
+                {
+                    IPEndPoint localEndPoint = new IPEndPoint(ipAddress, currentPort);
 
-            //Bind to address
-            listener.Bind(localEndPoint);
-            listener.Listen(100);
+                    // Create a TCP/IP socket.  
+                    listener = new Socket(ipAddress.AddressFamily,
+                        SocketType.Stream, ProtocolType.Tcp);
 
-            Debug.Log("Server Listening on: " + ip + ":" + port.ToString());
+                    //Bind to address
+                    listener.Bind(localEndPoint);
+                    listener.Listen(100);
+
+                    bound = true;
+
+                    if (currentPort != originalPort)
+                    {
+                        Debug.Log($"Port {originalPort} was in use. Server Listening on: {ip}:{currentPort}");
+                    }
+                    else
+                    {
+                        Debug.Log("Server Listening on: " + ip + ":" + currentPort.ToString());
+                    }
+                }
+                catch (SocketException e)
+                {
+                    // Check if the error is due to address already in use
+                    if (e.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                    {
+                        attempts++;
+                        currentPort++;
+                        if (listener != null)
+                        {
+                            listener.Close();
+                            listener = null;
+                        }
+                        if (debug)
+                        {
+                            Debug.Log($"Port {currentPort - 1} is in use, trying {currentPort}...");
+                        }
+                    }
+                    else
+                    {
+                        // Re-throw if it's a different socket error
+                        throw;
+                    }
+                }
+            }
+
+            if (!bound)
+            {
+                throw new Exception($"Could not find an available port after {maxAttempts} attempts starting from port {originalPort}");
+            }
         }
 
         // Thread loop to wait for new connections

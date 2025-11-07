@@ -7,7 +7,7 @@ public static class GlobalState
     public static string version = "v25.06.10";
     public static string host = "0.0.0.0";
     public static int port = 9091;
-    public static int portPrivateAPI = 9092;
+    public static int portMenu = 9093;
     public static int fps = 60;
     public static float timeScale = 1.0f;
     public static int maxSplitScreen = 4;
@@ -27,7 +27,6 @@ public static class GlobalState
     public static float kp = 5.0f;
     public static float kd = 5.0f;
     public static float ki = 0.0f;
-    public static string privateKey = "";
     public static bool useSeed = false;
     public static int seed = 20432814;
     public static string additionnalContentPath = "";

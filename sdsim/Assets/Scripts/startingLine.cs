@@ -6,12 +6,6 @@ public class startingLine : MonoBehaviour
 {
     public int index = 0;
     string target = "body";
-    PrivateAPI privateAPI;
-
-    void Start()
-    {
-        privateAPI = GameObject.FindFirstObjectByType<PrivateAPI>();
-    }
 
     void OnTriggerEnter(Collider col)
     {
@@ -26,8 +20,5 @@ public class startingLine : MonoBehaviour
 
         if (client != null)
             UnityMainThreadDispatcher.Instance().Enqueue(client.SendCollisionWithStartingLine(index, time));
-
-        if (privateAPI != null)
-            privateAPI.CollisionWithStatingLine(carName, index, time);
     }
 }

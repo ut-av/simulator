@@ -9,24 +9,18 @@ public class JustOne : MonoBehaviour
 
     void Awake()
     {
+        // Find any other JustOne with the same label. If one already exists, destroy this one.
         JustOne[] all_objs = GameObject.FindObjectsByType<JustOne>(FindObjectsSortMode.None);
 
-        List<JustOne> objs = new List<JustOne>();
-        
         foreach (JustOne obj in all_objs)
         {
+            if (obj == this) continue;
             if (obj.label == label)
             {
-                objs.Add(obj);
-            }
-        }
-
-        foreach (JustOne obj in objs)
-        {
-            if (obj.label == label && this == obj && objs.Count > 1)
-            {
-                Debug.Log("JustOne removing instance." + label);
-                GameObject.DestroyImmediate(obj.gameObject);
+                // Another instance with the same label exists; destroy this duplicate and exit.
+                Debug.LogWarning("JustOne found duplicate instance." + label);
+                // Use Destroy so Unity can cleanly remove the GameObject during the lifecycle.
+                //GameObject.Destroy(this.gameObject);
                 return;
             }
         }
@@ -34,6 +28,19 @@ public class JustOne : MonoBehaviour
         // DontDestroyOnLoad must be called on a root GameObject. If this component
         // is attached to a child, use the root GameObject to avoid Unity's warning.
         GameObject root = this.gameObject.transform.root.gameObject;
-        DontDestroyOnLoad(root);
+
+        // Prevent persisting UI EventSystem across scenes which commonly causes the
+        // "There can be only one active Event System" error when the next scene also
+        // contains an EventSystem. If the root contains an EventSystem, we avoid
+        // calling DontDestroyOnLoad so only the scene's EventSystem remains.
+        var eventSystem = root.GetComponentInChildren<UnityEngine.EventSystems.EventSystem>(true);
+        if (eventSystem != null)
+        {
+            Debug.Log("JustOne: root contains EventSystem; not calling DontDestroyOnLoad for '" + label + "' to avoid duplicate EventSystem.");
+        }
+        else
+        {
+            DontDestroyOnLoad(root);
+        }
     }
 }

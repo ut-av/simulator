@@ -11,10 +11,10 @@ public class GlobalStateEditor : MonoBehaviour
         get { return GlobalState.port; }
         set { GlobalState.port = value; }
     }
-    public int portPrivateAPI
+    public int portMenu
     {
-        get { return GlobalState.portPrivateAPI; }
-        set { GlobalState.portPrivateAPI = value; }
+        get { return GlobalState.portMenu; }
+        set { GlobalState.portMenu = value; }
     }
     public int fps
     {
@@ -96,11 +96,6 @@ public class GlobalStateEditor : MonoBehaviour
         get { return GlobalState.seed; }
         set { GlobalState.seed = value; }
     }
-    public string privateKey
-    {
-        get { return GlobalState.privateKey; }
-        set { GlobalState.privateKey = value; }
-    }
     public string additionnalContentPath
     {
         get { return GlobalState.additionnalContentPath; }
@@ -117,7 +112,6 @@ public class GlobalStateEditor : MonoBehaviour
         set { GlobalState.timeOut = value; }
     }
 
-    private bool showPrivateKey = false;
     private VersionCheck versionCheck;
     void Awake()
     {
@@ -160,12 +154,12 @@ public class GlobalStateEditor : MonoBehaviour
             port = tmp_port;
         YOffset += Ysteps;
 
-        GUI.Label(new Rect(0, YOffset, LabelXOffset, 20), "portPrivateAPI");
-        string portPrivateAPIString = GUI.TextField(new Rect(LabelXOffset, YOffset, width-LabelXOffset, 20), portPrivateAPI.ToString());
-        int tmp_portPrivateAPI = portPrivateAPI;
-        int.TryParse(portPrivateAPIString, out tmp_portPrivateAPI);
-        if (tmp_portPrivateAPI != portPrivateAPI)
-            portPrivateAPI = tmp_portPrivateAPI;
+        GUI.Label(new Rect(0, YOffset, LabelXOffset, 20), "portMenu");
+        string portMenuString = GUI.TextField(new Rect(LabelXOffset, YOffset, width-LabelXOffset, 20), portMenu.ToString());
+        int tmp_portMenu = portMenu;
+        int.TryParse(portMenuString, out tmp_portMenu);
+        if (tmp_portMenu != portMenu)
+            portMenu = tmp_portMenu;
         YOffset += Ysteps;
 
         GUI.Label(new Rect(0, YOffset, LabelXOffset, 20), "FPS limit");
@@ -275,20 +269,6 @@ public class GlobalStateEditor : MonoBehaviour
             if (getLatest) { versionCheck.GetLatestVersion(); }
         }
 
-        YOffset += Ysteps;
-        showPrivateKey = GUI.Toggle(new Rect(0, YOffset, width, 20), showPrivateKey, "showPrivateKey");
-        YOffset += Ysteps;
-        if (showPrivateKey)
-        {
-            GUI.Label(new Rect(0, YOffset, LabelXOffset, 20), "Private API Key");
-            privateKey = GUI.TextField(new Rect(LabelXOffset, YOffset, width, 20), privateKey);
-            YOffset += Ysteps;
-
-            bool doRandomize = GUI.Button(new Rect(0, YOffset, width, 20), "Randomize private key");
-            YOffset += Ysteps;
-            if (doRandomize) { RandomizePrivateKey(); }
-        }
-
         if (doSave) { SaveToPlayerPrefs(); }
 
         GUI.EndScrollView();
@@ -298,7 +278,7 @@ public class GlobalStateEditor : MonoBehaviour
     void SaveToPlayerPrefs()
     {
         PlayerPrefs.SetInt("port", port);
-        PlayerPrefs.SetInt("portPrivateAPI", portPrivateAPI);
+        PlayerPrefs.SetInt("portMenu", portMenu);
         PlayerPrefs.SetInt("fps", fps);
         PlayerPrefs.SetFloat("timeScale", timeScale);
         PlayerPrefs.SetFloat("timeOut", timeOut);
@@ -316,7 +296,6 @@ public class GlobalStateEditor : MonoBehaviour
         PlayerPrefs.SetFloat("kd", kd);
         PlayerPrefs.SetFloat("ki", ki);
         PlayerPrefs.SetInt("useSeed", useSeed ? 1 : 0);
-        PlayerPrefs.SetString("privateKey", privateKey);
 
         PlayerPrefs.Save();
     }
@@ -324,7 +303,7 @@ public class GlobalStateEditor : MonoBehaviour
     void LoadPlayerPrefs()
     {
         port = PlayerPrefs.GetInt("port", port);
-        portPrivateAPI = PlayerPrefs.GetInt("portPrivateAPI", portPrivateAPI);
+        portMenu = PlayerPrefs.GetInt("portMenu", portMenu);
         fps = PlayerPrefs.GetInt("fps", fps);
         timeScale = PlayerPrefs.GetFloat("timeScale", timeScale);
         timeOut = PlayerPrefs.GetFloat("timeOut", timeOut);
@@ -342,14 +321,6 @@ public class GlobalStateEditor : MonoBehaviour
         kd = PlayerPrefs.GetFloat("kd", kd);
         ki = PlayerPrefs.GetFloat("ki", ki);
         useSeed = PlayerPrefs.GetInt("useSeed", useSeed ? 1 : 0) == 1 ? true : false;
-        privateKey = PlayerPrefs.GetString("privateKey", Random.Range(10000000, 99999999).ToString());
         additionnalContentPath = Application.streamingAssetsPath;
-    }
-
-    void RandomizePrivateKey()
-    {
-        privateKey = Random.Range(10000000, 99999999).ToString();
-        PlayerPrefs.SetString("privateKey", privateKey);
-        PlayerPrefs.Save();
     }
 }
