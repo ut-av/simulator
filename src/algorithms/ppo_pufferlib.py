@@ -13,6 +13,7 @@ import argparse
 import random
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 import numpy as np
@@ -257,8 +258,10 @@ class PPOTrainer:
         self.batch_size = int(config.num_envs * config.num_steps)
         self.minibatch_size = int(self.batch_size // config.num_minibatches)
         
-        # Setup logging
-        self.writer = SummaryWriter(config.log_dir)
+        # Setup logging with readable timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.log_dir = f"{config.log_dir}/{timestamp}"
+        self.writer = SummaryWriter(self.log_dir)
         
         # Training state
         self.global_step = 0
@@ -283,6 +286,12 @@ class PPOTrainer:
         
         episode_rewards = []
         episode_lengths = []
+        episode_cte = []
+        episode_speed = []
+        episode_forward_vel = []
+        episode_hits = []
+        episode_lap_times = []
+        episode_lap_counts = []
         
         # Collect num_steps per environment
         for step in range(self.config.num_steps):
@@ -338,6 +347,38 @@ class PPOTrainer:
                         ep_info = info["episode"][idx]
                         episode_rewards.append(ep_info["r"])
                         episode_lengths.append(ep_info["l"])
+                
+                # Log environment-specific metrics from info dict
+                # These come from donkey_sim.py's observe() method
+                if isinstance(info, dict):
+                    # Cross track error (distance from center of track)
+                    if "cte" in info:
+                        cte_val = info["cte"][idx] if hasattr(info["cte"], "__getitem__") else info["cte"]
+                        episode_cte.append(abs(cte_val))
+                    
+                    # Speed and velocity metrics
+                    if "speed" in info:
+                        speed_val = info["speed"][idx] if hasattr(info["speed"], "__getitem__") else info["speed"]
+                        episode_speed.append(speed_val)
+                    
+                    if "forward_vel" in info:
+                        fwd_vel = info["forward_vel"][idx] if hasattr(info["forward_vel"], "__getitem__") else info["forward_vel"]
+                        episode_forward_vel.append(fwd_vel)
+                    
+                    # Collision detection
+                    if "hit" in info:
+                        hit_val = info["hit"][idx] if hasattr(info["hit"], "__getitem__") else info["hit"]
+                        episode_hits.append(1.0 if hit_val != "none" else 0.0)
+                    
+                    # Lap timing metrics
+                    if "last_lap_time" in info:
+                        lap_time = info["last_lap_time"][idx] if hasattr(info["last_lap_time"], "__getitem__") else info["last_lap_time"]
+                        if lap_time > 0.0:  # Only log when a lap is completed
+                            episode_lap_times.append(lap_time)
+                    
+                    if "lap_count" in info:
+                        lap_count = info["lap_count"][idx] if hasattr(info["lap_count"], "__getitem__") else info["lap_count"]
+                        episode_lap_counts.append(lap_count)
         
         # Compute returns and advantages
         with torch.no_grad():
@@ -349,7 +390,19 @@ class PPOTrainer:
                 self.config.gae_lambda,
             )
         
-        return returns, advantages, episode_rewards, episode_lengths
+        # Package all metrics for logging
+        metrics = {
+            "episode_rewards": episode_rewards,
+            "episode_lengths": episode_lengths,
+            "episode_cte": episode_cte,
+            "episode_speed": episode_speed,
+            "episode_forward_vel": episode_forward_vel,
+            "episode_hits": episode_hits,
+            "episode_lap_times": episode_lap_times,
+            "episode_lap_counts": episode_lap_counts,
+        }
+        
+        return returns, advantages, metrics
     
     def update_policy(self, returns, advantages):
         """Update policy using PPO"""
@@ -450,6 +503,7 @@ class PPOTrainer:
         print(f"Batch size: {self.batch_size}")
         print(f"Minibatch size: {self.minibatch_size}")
         print(f"Device: {self.device}")
+        print(f"Experiment name: {self.log_dir}")
         print(f"{'='*60}\n")
         
         start_time = time.time()
@@ -459,12 +513,22 @@ class PPOTrainer:
             self.update = update
             
             # Collect rollouts
-            returns, advantages, episode_rewards, episode_lengths = self.collect_rollouts()
+            returns, advantages, metrics = self.collect_rollouts()
             
             # Update policy
             train_stats = self.update_policy(returns, advantages)
             
-            # Logging
+            # Extract metrics
+            episode_rewards = metrics["episode_rewards"]
+            episode_lengths = metrics["episode_lengths"]
+            episode_cte = metrics["episode_cte"]
+            episode_speed = metrics["episode_speed"]
+            episode_forward_vel = metrics["episode_forward_vel"]
+            episode_hits = metrics["episode_hits"]
+            episode_lap_times = metrics["episode_lap_times"]
+            episode_lap_counts = metrics["episode_lap_counts"]
+            
+            # Logging - Episode Performance Metrics
             if len(episode_rewards) > 0:
                 # Convert to numpy array if needed and ensure non-empty
                 episode_rewards_arr = np.array(episode_rewards) if not isinstance(episode_rewards, np.ndarray) else episode_rewards
@@ -472,6 +536,35 @@ class PPOTrainer:
                 if len(episode_rewards_arr) > 0:
                     self.writer.add_scalar("charts/episodic_return", np.mean(episode_rewards_arr), self.global_step)
                     self.writer.add_scalar("charts/episodic_length", np.mean(episode_lengths_arr), self.global_step)
+            
+            # Logging - Driving Performance Metrics
+            if len(episode_cte) > 0:
+                cte_arr = np.array(episode_cte)
+                self.writer.add_scalar("driving/cross_track_error", np.mean(cte_arr), self.global_step)
+                self.writer.add_scalar("driving/cte_std", np.std(cte_arr), self.global_step)
+            
+            if len(episode_speed) > 0:
+                speed_arr = np.array(episode_speed)
+                self.writer.add_scalar("driving/speed", np.mean(speed_arr), self.global_step)
+            
+            if len(episode_forward_vel) > 0:
+                fwd_vel_arr = np.array(episode_forward_vel)
+                self.writer.add_scalar("driving/forward_velocity", np.mean(fwd_vel_arr), self.global_step)
+            
+            if len(episode_hits) > 0:
+                hits_arr = np.array(episode_hits)
+                self.writer.add_scalar("driving/collision_rate", np.mean(hits_arr), self.global_step)
+            
+            # Logging - Lap Performance Metrics
+            if len(episode_lap_times) > 0:
+                lap_times_arr = np.array(episode_lap_times)
+                self.writer.add_scalar("laps/lap_time_mean", np.mean(lap_times_arr), self.global_step)
+                self.writer.add_scalar("laps/lap_time_min", np.min(lap_times_arr), self.global_step)
+                self.writer.add_scalar("laps/lap_time_std", np.std(lap_times_arr), self.global_step)
+            
+            if len(episode_lap_counts) > 0:
+                lap_counts_arr = np.array(episode_lap_counts)
+                self.writer.add_scalar("laps/completed_laps", np.sum(lap_counts_arr), self.global_step)
             
             self.writer.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step)
             self.writer.add_scalar("losses/value_loss", train_stats["v_loss"], self.global_step)
@@ -492,12 +585,19 @@ class PPOTrainer:
                 if len(episode_rewards_arr) > 0 and len(episode_lengths_arr) > 0:
                     print(f"  Reward: {np.mean(episode_rewards_arr):.2f} ± {np.std(episode_rewards_arr):.2f}")
                     print(f"  Length: {np.mean(episode_lengths_arr):.1f}")
+            
+            # Print driving performance
+            if len(episode_cte) > 0:
+                print(f"  CTE: {np.mean(episode_cte):.3f} | Speed: {np.mean(episode_speed):.2f} | Collisions: {np.mean(episode_hits):.2%}")
+            if len(episode_lap_times) > 0:
+                print(f"  Best Lap: {np.min(episode_lap_times):.2f}s | Avg Lap: {np.mean(episode_lap_times):.2f}s")
+            
             print(f"  PG Loss: {train_stats['pg_loss']:.4f} | V Loss: {train_stats['v_loss']:.4f}")
             print(f"  Entropy: {train_stats['entropy_loss']:.4f} | KL: {train_stats['approx_kl']:.4f}")
             
             # Save model
             if update % self.config.save_model_freq == 0:
-                model_path = f"{self.config.log_dir}/ppo_donkey_update{update}.pt"
+                model_path = f"{self.log_dir}/ppo_donkey_update{update}.pt"
                 torch.save({
                     "update": update,
                     "global_step": self.global_step,
@@ -507,7 +607,7 @@ class PPOTrainer:
                 print(f"  Saved model to {model_path}")
         
         # Save final model
-        final_model_path = f"{self.config.log_dir}/ppo_donkey_final.pt"
+        final_model_path = f"{self.log_dir}/ppo_donkey_final.pt"
         torch.save({
             "update": self.update,
             "global_step": self.global_step,

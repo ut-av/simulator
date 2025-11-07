@@ -78,14 +78,19 @@ class DonkeyEnv(gym.Env):
         logger.debug(conf)
 
         # start Unity simulation subprocess
+        # NOTE: Simulator launching is now handled by sim_starter.py
+        # This block is disabled to prevent duplicate simulator instances
         self.proc = None
         if "exe_path" in conf:
-            self.proc = DonkeyUnityProcess()
-            # the unity sim server will bind to the host ip given
-            self.proc.start(conf["exe_path"], host="0.0.0.0", port=conf["port"])
-
-            # wait for simulator to startup and begin listening
-            time.sleep(conf["start_delay"])
+            logger.warning(
+                "DEPRECATION WARNING: 'exe_path' should not be passed to DonkeyEnv. "
+                "Simulator launching should be handled by sim_starter.py to avoid duplicate instances. "
+                "Ignoring 'exe_path' and assuming simulator is already running on port {}.".format(conf["port"])
+            )
+            # Do NOT launch simulator - it should already be running
+            # self.proc = DonkeyUnityProcess()
+            # self.proc.start(conf["exe_path"], host="0.0.0.0", port=conf["port"])
+            # time.sleep(conf["start_delay"])
 
         # start simulation com
         self.viewer = DonkeyUnitySimContoller(conf=conf)

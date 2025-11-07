@@ -75,3 +75,5 @@ dataset
 # Model outputs
 wandb/
 output/
+
+resources

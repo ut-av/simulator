@@ -40,7 +40,7 @@ ENV_NAME_TO_SCENE = {
 }
 
 # Default simulator executable path
-DEFAULT_SIM_PATH = "./simulator/SimLinux/sim.x86_64"
+DEFAULT_SIM_PATH = "./simulator/build/linux/sim.x86_64"
 
 # Track all launched simulator processes
 _launched_processes: List[subprocess.Popen] = []
@@ -94,6 +94,7 @@ def launch_simulator(
     sim_path: str = DEFAULT_SIM_PATH,
     port: int = 9091,
     host: str = "0.0.0.0",
+    debug: bool = False,
     logfile: str = "-",
 ) -> Optional[subprocess.Popen]:
     """
@@ -114,6 +115,7 @@ def launch_simulator(
         sim_path: Path to the simulator executable (default: ./SimLinux/im.x86_64)
         port: Port number for the simulator (default: 9091)
         host: Host address to bind to (default: 0.0.0.0)
+        debug: Enable debug mode with logging (default: False)
         logfile: Log file path, use "-" for stdout (default: -)
     
     Returns:
@@ -144,8 +146,11 @@ def launch_simulator(
         "--scene", scene,
         "--port", str(port),
         "--host", host,
-        "-logfile", logfile,
     ]
+    
+    # Only add logfile parameter in debug mode
+    if debug:
+        cmd.extend(["-logfile", logfile])
     
     # Launch simulator
     proc = subprocess.Popen(cmd)
@@ -154,7 +159,7 @@ def launch_simulator(
     return proc, port
 
 
-def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091, conf: Optional[dict] = None):
+def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091, conf: Optional[dict] = None, debug: bool = False):
     """
     Start the simulator on the given port and create a gym environment.
     Each call launches a new simulator instance.
@@ -163,6 +168,7 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
         env_name: Gym environment name (default: donkey-circuit-launch-track-v0)
         port: Port number for the simulator (default: 9091)
         conf: Optional configuration dictionary to override defaults
+        debug: Enable debug mode with logging (default: False)
     
     Returns:
         Gym environment instance
@@ -185,7 +191,7 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
         sim_path = conf["exe_path"]
     
     # Launch simulator instance
-    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port)
+    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port, debug=debug)
     
     # Wait for simulator to start (if it was launched)
     if proc is not None:
@@ -209,11 +215,19 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
     
     # Merge user-provided conf with defaults
     if conf is not None:
-        merged_conf = {**default_conf, **conf}
+        # First remove exe_path from the user's conf before merging
+        # This prevents it from being included in merged_conf
+        conf_without_exe = {k: v for k, v in conf.items() if k != "exe_path"}
+        merged_conf = {**default_conf, **conf_without_exe}
         # Ensure port is set correctly
         merged_conf["port"] = port
     else:
         merged_conf = default_conf
+    
+    # Double-check that exe_path is not in the config
+    # This is critical to prevent DonkeyEnv from launching another simulator
+    if "exe_path" in merged_conf:
+        del merged_conf["exe_path"]
     
     # Create gym environment
     env = gym.make(env_name, conf=merged_conf)
