@@ -80,13 +80,21 @@ atexit.register(_cleanup_processes)
 def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
     """
     Check if the given port is in use.
+    
+    This function attempts to bind to the port. If binding fails with
+    "Address already in use", the port is in use. This correctly detects
+    ports that are bound (even if not yet listening), preventing multiple
+    simulators from trying to use the same port.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.connect((host, port))
-            return True
-        except ConnectionRefusedError:
+            # Try to bind to the port. If it's in use, this will raise OSError
+            s.bind((host, port))
+            # Successfully bound - port is free
             return False
+        except OSError:
+            # Failed to bind - port is in use
+            return True
 
 
 def launch_simulator(

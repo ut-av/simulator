@@ -10,11 +10,8 @@ import sys
 sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
 
 import argparse
-import os
-import random
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
 
 import numpy as np
@@ -25,6 +22,16 @@ from torch.distributions import Normal
 from torch.utils.tensorboard import SummaryWriter
 
 from pufferlib_wrapper import make_vectorized_env
+from rl_utils import (
+    CNNFeatureExtractor,
+    EpisodeMetricsLogger,
+    clip_action_to_space,
+    extract_episode_metrics,
+    layer_init,
+    prepare_observation,
+    set_random_seeds,
+    setup_logging_dirs,
+)
 
 
 @dataclass
@@ -65,50 +72,22 @@ class PPOConfig:
     torch_deterministic: bool = True
 
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    """Initialize network layer with orthogonal initialization"""
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
-
-
 class CNNActorCritic(nn.Module):
     """
     CNN-based Actor-Critic network for visual observations
     Suitable for DonkeyEnv's camera input
+    Uses shared CNNFeatureExtractor from rl_utils
     """
     def __init__(self, observation_space, action_space):
         super().__init__()
         
-        # Determine input shape
-        # DonkeyEnv provides HxWxC images
-        obs_shape = observation_space.shape
-        if len(obs_shape) == 3:
-            # Assume HxWxC format, convert to CxHxW for PyTorch
-            self.input_channels = obs_shape[2]
-        else:
-            raise ValueError(f"Unexpected observation shape: {obs_shape}")
-        
-        # CNN feature extractor
-        self.cnn = nn.Sequential(
-            layer_init(nn.Conv2d(self.input_channels, 32, kernel_size=8, stride=4)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(32, 64, kernel_size=4, stride=2)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(64, 64, kernel_size=3, stride=1)),
-            nn.ReLU(),
-            nn.Flatten(),
-        )
-        
-        # Calculate CNN output size
-        with torch.no_grad():
-            # Create dummy input in CxHxW format
-            dummy_input = torch.zeros(1, self.input_channels, obs_shape[0], obs_shape[1])
-            cnn_output_size = self.cnn(dummy_input).shape[1]
+        # Shared feature extractor
+        self.feature_extractor = CNNFeatureExtractor(observation_space)
+        feature_dim = self.feature_extractor.feature_dim
         
         # Actor head (policy)
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size, 256)),
+            layer_init(nn.Linear(feature_dim, 256)),
             nn.ReLU(),
             layer_init(nn.Linear(256, action_space.shape[0]), std=0.01),
         )
@@ -118,29 +97,19 @@ class CNNActorCritic(nn.Module):
         
         # Critic head (value function)
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size, 256)),
+            layer_init(nn.Linear(feature_dim, 256)),
             nn.ReLU(),
             layer_init(nn.Linear(256, 1), std=1.0),
         )
     
-    def get_features(self, x):
-        """Extract features from observations"""
-        # Convert HxWxC to CxHxW and normalize to [0, 1]
-        if len(x.shape) == 4:  # Batch of images
-            x = x.permute(0, 3, 1, 2)  # BxHxWxC -> BxCxHxW
-        else:
-            x = x.permute(2, 0, 1)  # HxWxC -> CxHxW
-        x = x.float() / 255.0
-        return self.cnn(x)
-    
     def get_value(self, x):
         """Get value estimate for state"""
-        features = self.get_features(x)
+        features = self.feature_extractor(x)
         return self.critic(features)
     
     def get_action_and_value(self, x, action=None):
         """Get action distribution and value estimate"""
-        features = self.get_features(x)
+        features = self.feature_extractor(x)
         
         # Actor: get mean and std for continuous actions
         action_mean = self.actor_mean(features)
@@ -219,10 +188,7 @@ class PPOTrainer:
         self.config = config
         
         # Set random seeds
-        random.seed(config.seed)
-        np.random.seed(config.seed)
-        torch.manual_seed(config.seed)
-        torch.backends.cudnn.deterministic = config.torch_deterministic
+        set_random_seeds(config.seed, config.torch_deterministic)
         
         # Setup device
         self.device = torch.device(config.device)
@@ -260,19 +226,14 @@ class PPOTrainer:
         self.batch_size = int(config.num_envs * config.num_steps)
         self.minibatch_size = int(self.batch_size // config.num_minibatches)
         
-        # Setup logging with readable timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.log_dir = f"{config.log_dir}/{timestamp}"
-        self.model_dir = f"{config.model_dir}/{timestamp}"
-        
-        # Create model directory
-        os.makedirs(self.model_dir, exist_ok=True)
-        
+        # Setup logging
+        self.log_dir, self.model_dir = setup_logging_dirs(config.log_dir, config.model_dir)
         self.writer = SummaryWriter(self.log_dir)
         
         # Training state
         self.global_step = 0
         self.update = 0
+        self.episode_metrics = EpisodeMetricsLogger()
         
     def collect_rollouts(self):
         """Collect rollouts from the environment"""
@@ -285,20 +246,9 @@ class PPOTrainer:
             next_obs = reset_result[0]
         else:
             next_obs = reset_result
-        # Convert to numpy array first, then to tensor (more efficient)
-        if not isinstance(next_obs, np.ndarray):
-            next_obs = np.array(next_obs)
-        next_obs = torch.from_numpy(next_obs).float().to(self.device)
-        next_done = torch.zeros(self.config.num_envs).to(self.device)
         
-        episode_rewards = []
-        episode_lengths = []
-        episode_cte = []
-        episode_speed = []
-        episode_forward_vel = []
-        episode_hits = []
-        episode_lap_times = []
-        episode_lap_counts = []
+        next_obs = prepare_observation(next_obs, self.device)
+        next_done = torch.zeros(self.config.num_envs).to(self.device)
         
         # Collect num_steps per environment
         for step in range(self.config.num_steps):
@@ -309,25 +259,11 @@ class PPOTrainer:
                 action, logprob, _, value = self.agent.get_action_and_value(next_obs)
                 value = value.flatten()
             
-            # Convert actions to numpy and ensure they match action space
-            # Actions should be shape (num_envs, action_dim) with dtype matching action space
-            action_np = action.cpu().numpy()
-            # Ensure dtype matches action space (usually float32)
-            if action_np.dtype != self.envs.single_action_space.dtype:
-                action_np = action_np.astype(self.envs.single_action_space.dtype)
-            # Clip actions to action space bounds
-            action_np = np.clip(
-                action_np,
-                self.envs.single_action_space.low,
-                self.envs.single_action_space.high
-            )
+            # Convert and clip actions to action space
+            action_np = clip_action_to_space(action, self.envs.single_action_space)
             
             # Step environment
-            # Pufferlib vectorized environments return (obs, reward, terminated, truncated, info)
             next_obs_np, reward, terminated, truncated, info = self.envs.step(action_np)
-            
-            # Combine terminated and truncated into done for buffer storage
-            # (PPO typically uses 'done' which is True if either terminated or truncated)
             done = np.logical_or(terminated, truncated)
             
             # Store in buffer
@@ -341,51 +277,15 @@ class PPOTrainer:
             )
             
             # Update for next iteration
-            # Convert to numpy array first, then to tensor (more efficient)
-            if not isinstance(next_obs_np, np.ndarray):
-                next_obs_np = np.array(next_obs_np)
-            next_obs = torch.from_numpy(next_obs_np).float().to(self.device)
+            next_obs = prepare_observation(next_obs_np, self.device)
             next_done = torch.tensor(done, dtype=torch.float32).to(self.device)
             
-            # Log episode info
+            # Log episode metrics
             for idx, d in enumerate(done):
                 if d:
-                    if "episode" in info:
-                        ep_info = info["episode"][idx]
-                        episode_rewards.append(ep_info["r"])
-                        episode_lengths.append(ep_info["l"])
-                
-                # Log environment-specific metrics from info dict
-                # These come from donkey_sim.py's observe() method
-                if isinstance(info, dict):
-                    # Cross track error (distance from center of track)
-                    if "cte" in info:
-                        cte_val = info["cte"][idx] if hasattr(info["cte"], "__getitem__") else info["cte"]
-                        episode_cte.append(abs(cte_val))
-                    
-                    # Speed and velocity metrics
-                    if "speed" in info:
-                        speed_val = info["speed"][idx] if hasattr(info["speed"], "__getitem__") else info["speed"]
-                        episode_speed.append(speed_val)
-                    
-                    if "forward_vel" in info:
-                        fwd_vel = info["forward_vel"][idx] if hasattr(info["forward_vel"], "__getitem__") else info["forward_vel"]
-                        episode_forward_vel.append(fwd_vel)
-                    
-                    # Collision detection
-                    if "hit" in info:
-                        hit_val = info["hit"][idx] if hasattr(info["hit"], "__getitem__") else info["hit"]
-                        episode_hits.append(1.0 if hit_val != "none" else 0.0)
-                    
-                    # Lap timing metrics
-                    if "last_lap_time" in info:
-                        lap_time = info["last_lap_time"][idx] if hasattr(info["last_lap_time"], "__getitem__") else info["last_lap_time"]
-                        if lap_time > 0.0:  # Only log when a lap is completed
-                            episode_lap_times.append(lap_time)
-                    
-                    if "lap_count" in info:
-                        lap_count = info["lap_count"][idx] if hasattr(info["lap_count"], "__getitem__") else info["lap_count"]
-                        episode_lap_counts.append(lap_count)
+                    metrics = extract_episode_metrics(info, idx, d)
+                    if metrics:
+                        self.episode_metrics.add_metrics(metrics)
         
         # Compute returns and advantages
         with torch.no_grad():
@@ -397,19 +297,7 @@ class PPOTrainer:
                 self.config.gae_lambda,
             )
         
-        # Package all metrics for logging
-        metrics = {
-            "episode_rewards": episode_rewards,
-            "episode_lengths": episode_lengths,
-            "episode_cte": episode_cte,
-            "episode_speed": episode_speed,
-            "episode_forward_vel": episode_forward_vel,
-            "episode_hits": episode_hits,
-            "episode_lap_times": episode_lap_times,
-            "episode_lap_counts": episode_lap_counts,
-        }
-        
-        return returns, advantages, metrics
+        return returns, advantages
     
     def update_policy(self, returns, advantages):
         """Update policy using PPO"""
@@ -521,59 +409,15 @@ class PPOTrainer:
             self.update = update
             
             # Collect rollouts
-            returns, advantages, metrics = self.collect_rollouts()
+            returns, advantages = self.collect_rollouts()
             
             # Update policy
             train_stats = self.update_policy(returns, advantages)
             
-            # Extract metrics
-            episode_rewards = metrics["episode_rewards"]
-            episode_lengths = metrics["episode_lengths"]
-            episode_cte = metrics["episode_cte"]
-            episode_speed = metrics["episode_speed"]
-            episode_forward_vel = metrics["episode_forward_vel"]
-            episode_hits = metrics["episode_hits"]
-            episode_lap_times = metrics["episode_lap_times"]
-            episode_lap_counts = metrics["episode_lap_counts"]
+            # Log episode metrics to TensorBoard
+            self.episode_metrics.log_to_tensorboard(self.writer, self.global_step)
             
-            # Logging - Episode Performance Metrics
-            if len(episode_rewards) > 0:
-                # Convert to numpy array if needed and ensure non-empty
-                episode_rewards_arr = np.array(episode_rewards) if not isinstance(episode_rewards, np.ndarray) else episode_rewards
-                episode_lengths_arr = np.array(episode_lengths) if not isinstance(episode_lengths, np.ndarray) else episode_lengths
-                if len(episode_rewards_arr) > 0:
-                    self.writer.add_scalar("charts/episodic_return", np.mean(episode_rewards_arr), self.global_step)
-                    self.writer.add_scalar("charts/episodic_length", np.mean(episode_lengths_arr), self.global_step)
-            
-            # Logging - Driving Performance Metrics
-            if len(episode_cte) > 0:
-                cte_arr = np.array(episode_cte)
-                self.writer.add_scalar("driving/cross_track_error", np.mean(cte_arr), self.global_step)
-                self.writer.add_scalar("driving/cte_std", np.std(cte_arr), self.global_step)
-            
-            if len(episode_speed) > 0:
-                speed_arr = np.array(episode_speed)
-                self.writer.add_scalar("driving/speed", np.mean(speed_arr), self.global_step)
-            
-            if len(episode_forward_vel) > 0:
-                fwd_vel_arr = np.array(episode_forward_vel)
-                self.writer.add_scalar("driving/forward_velocity", np.mean(fwd_vel_arr), self.global_step)
-            
-            if len(episode_hits) > 0:
-                hits_arr = np.array(episode_hits)
-                self.writer.add_scalar("driving/collision_rate", np.mean(hits_arr), self.global_step)
-            
-            # Logging - Lap Performance Metrics
-            if len(episode_lap_times) > 0:
-                lap_times_arr = np.array(episode_lap_times)
-                self.writer.add_scalar("laps/lap_time_mean", np.mean(lap_times_arr), self.global_step)
-                self.writer.add_scalar("laps/lap_time_min", np.min(lap_times_arr), self.global_step)
-                self.writer.add_scalar("laps/lap_time_std", np.std(lap_times_arr), self.global_step)
-            
-            if len(episode_lap_counts) > 0:
-                lap_counts_arr = np.array(episode_lap_counts)
-                self.writer.add_scalar("laps/completed_laps", np.sum(lap_counts_arr), self.global_step)
-            
+            # Log training stats
             self.writer.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.global_step)
             self.writer.add_scalar("losses/value_loss", train_stats["v_loss"], self.global_step)
             self.writer.add_scalar("losses/policy_loss", train_stats["pg_loss"], self.global_step)
@@ -586,22 +430,18 @@ class PPOTrainer:
             # Print progress
             sps = int(self.global_step / (time.time() - start_time))
             print(f"Update {update}/{num_updates} | Step {self.global_step} | SPS: {sps}")
-            if len(episode_rewards) > 0:
-                # Convert to numpy array if needed and ensure non-empty
-                episode_rewards_arr = np.array(episode_rewards) if not isinstance(episode_rewards, np.ndarray) else episode_rewards
-                episode_lengths_arr = np.array(episode_lengths) if not isinstance(episode_lengths, np.ndarray) else episode_lengths
-                if len(episode_rewards_arr) > 0 and len(episode_lengths_arr) > 0:
-                    print(f"  Reward: {np.mean(episode_rewards_arr):.2f} ± {np.std(episode_rewards_arr):.2f}")
-                    print(f"  Length: {np.mean(episode_lengths_arr):.1f}")
             
-            # Print driving performance
-            if len(episode_cte) > 0:
-                print(f"  CTE: {np.mean(episode_cte):.3f} | Speed: {np.mean(episode_speed):.2f} | Collisions: {np.mean(episode_hits):.2%}")
-            if len(episode_lap_times) > 0:
-                print(f"  Best Lap: {np.min(episode_lap_times):.2f}s | Avg Lap: {np.mean(episode_lap_times):.2f}s")
+            # Print episode metrics summary
+            summary = self.episode_metrics.print_summary()
+            if summary:
+                print(summary)
             
+            # Print training stats
             print(f"  PG Loss: {train_stats['pg_loss']:.4f} | V Loss: {train_stats['v_loss']:.4f}")
             print(f"  Entropy: {train_stats['entropy_loss']:.4f} | KL: {train_stats['approx_kl']:.4f}")
+            
+            # Reset episode metrics for next update
+            self.episode_metrics.reset()
             
             # Save model
             if update % self.config.save_model_freq == 0:
