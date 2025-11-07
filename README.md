@@ -18,7 +18,6 @@ Then clone the repository, cd into it, and install dependencies with `uv sync`
 uv run python src/algorithms/ppo_pufferlib.py --num-envs 1
 ```
 
-> Parallel training is not yet working correctly.
 ```bash
 # Parallel training (faster, recommended)
 # Note: You need to start multiple simulator instances on ports 9091-9094
