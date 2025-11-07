@@ -200,6 +200,7 @@ class PPOTrainer:
             num_envs=config.num_envs,
             start_port=config.start_port,
             backend=config.backend,
+            policy_name="ppo",
         )
         
         # Get observation and action spaces

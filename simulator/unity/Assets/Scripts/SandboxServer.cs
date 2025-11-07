@@ -59,17 +59,16 @@ public class SandboxServer : MonoBehaviour
 
     private void Awake()
     {
+        CheckCommandLineConnectArgs();
+        Debug.Log($"Unified Sandbox Server starting on {host}:{port}");
+        Debug.Log("Supports: Track API and Menu API simultaneously");
+
         _server = GetComponent<tk.TcpServer>();
     }
 
     // Start is called before the first frame update
     void Start()
     {
-        CheckCommandLineConnectArgs();
-
-        Debug.Log($"Unified Sandbox Server starting on {host}:{port}");
-        Debug.Log("Supports: Track API and Menu API simultaneously");
-        
         _server.onClientConntedCB += new tk.TcpServer.OnClientConnected(OnClientConnected);
         _server.onClientDisconntedCB += new tk.TcpServer.OnClientDisconnected(OnClientDisconnected);
 

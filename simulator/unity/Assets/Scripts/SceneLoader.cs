@@ -9,18 +9,49 @@ public class SceneLoader : MonoBehaviour
 
     public void LoadMenuScene()
     {
+        ShutdownTcpServer();
         SceneManager.LoadSceneAsync("menu");
     }
 
     public void LoadScene(string scene_name)
     {
         Debug.Log(scene_name);
+        ShutdownTcpServer();
         SceneManager.LoadSceneAsync(scene_name);
     }
 
     public void QuitApplication()
     {
         Application.Quit();
+    }
+
+    // Shutdown any existing TCP server and wait for the port to be freed
+    private void ShutdownTcpServer()
+    {
+        // Shutdown all active TCP servers (both TrackServer and MenuServer may exist)
+        tk.TcpServer tcpServer = GameObject.FindFirstObjectByType<tk.TcpServer>();
+        if (tcpServer != null)
+        {
+            int boundPort = tcpServer.BoundPort;
+            Debug.Log($"Shutting down existing TCP server on port {boundPort}...");
+            tcpServer.Stop();
+        }
+        
+        // Also shutdown any TrackServer components that may exist
+        TrackServer trackServer = GameObject.FindFirstObjectByType<TrackServer>();
+        if (trackServer != null)
+        {
+            Debug.Log("Shutting down TrackServer...");
+            Destroy(trackServer.gameObject);
+        }
+        
+        // Also shutdown any MenuServer components that may exist
+        MenuServer menuServer = GameObject.FindFirstObjectByType<MenuServer>();
+        if (menuServer != null)
+        {
+            Debug.Log("Shutting down MenuServer...");
+            Destroy(menuServer.gameObject);
+        }
     }
 
     public void SetLogDir()

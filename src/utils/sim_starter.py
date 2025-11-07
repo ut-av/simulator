@@ -7,6 +7,8 @@ import time
 import signal
 import atexit
 import sys
+import re
+import traceback
 from typing import Optional, List
 
 # Valid scene names matching the environment classes in __init__.py
@@ -45,6 +47,14 @@ DEFAULT_SIM_PATH = "./simulator/build/linux/sim.x86_64"
 # Track all launched simulator processes
 _launched_processes: List[subprocess.Popen] = []
 
+# Track which ports have active simulators (port -> (proc, actual_port))
+# actual_port may differ from requested port if simulator auto-increments
+_port_to_simulator: dict[int, tuple[subprocess.Popen, int]] = {}
+
+# Cache gym environments by (env_name, port) to avoid creating duplicate connections
+# This prevents multiple cars from connecting to the same simulator
+_env_cache: dict[tuple[str, int], gym.Env] = {}
+
 
 def _cleanup_processes():
     """Kill all tracked simulator processes."""
@@ -62,6 +72,8 @@ def _cleanup_processes():
             except Exception as e:
                 print(f"Error killing process {proc.pid}: {e}")
     _launched_processes.clear()
+    _port_to_simulator.clear()
+    _env_cache.clear()
 
 
 def _signal_handler(signum, frame):
@@ -102,7 +114,6 @@ def launch_simulator(
     sim_path: str = DEFAULT_SIM_PATH,
     port: int = 9091,
     host: str = "0.0.0.0",
-    debug: bool = False,
     logfile: str = "-",
 ) -> Optional[subprocess.Popen]:
     """
@@ -132,6 +143,16 @@ def launch_simulator(
     Raises:
         ValueError: If scene name is not valid
     """
+    # DEBUG: Print stack trace to see where this is being called from
+    print(f"\n[DEBUG] launch_simulator called for scene={scene}, port={port}")
+    print("[DEBUG] Call stack:")
+    for line in traceback.format_stack()[-5:-1]:  # Show last 4 frames (excluding this one)
+        print(f"  {line.strip()}")
+    print()
+    
+    # Save requested port before it might be modified
+    requested_port = port
+    
     # Validate scene name
     if scene not in VALID_SCENES:
         valid_scenes = ", ".join(sorted(VALID_SCENES.keys()))
@@ -143,10 +164,21 @@ def launch_simulator(
     if not os.path.exists(sim_path):
         raise FileNotFoundError(f"Simulator path '{sim_path}' cannot be found.")
     
-    # check if the port is already in use
-    while is_port_in_use(port):
-        port += 1
-    print(f"Using port {port}")
+    # Check if we already have a simulator running on this port
+    if port in _port_to_simulator:
+        proc, actual_port = _port_to_simulator[port]
+        if proc.poll() is None:  # Process is still running
+            print(f"[DEBUG] Reusing existing simulator on port {port} (PID: {proc.pid}, actual port: {actual_port})")
+            return proc, actual_port
+        else:
+            # Process died, remove from tracking
+            print(f"[DEBUG] Previous simulator on port {port} has died, launching new one")
+            del _port_to_simulator[port]
+    
+    # DEBUG: Check if port is already in use (might indicate another simulator is running)
+    if is_port_in_use(port):
+        print(f"[DEBUG] WARNING: Port {port} is already in use! This might indicate another simulator is running.")
+        print(f"[DEBUG] This launch_simulator call will still proceed, but the simulator may choose a different port.")
 
     # Build command
     cmd = [
@@ -154,16 +186,63 @@ def launch_simulator(
         "--scene", scene,
         "--port", str(port),
         "--host", host,
+        "-logfile", logfile,
     ]
     
-    # Only add logfile parameter in debug mode
-    if debug:
-        cmd.extend(["-logfile", logfile])
-    
-    # Launch simulator
-    proc = subprocess.Popen(cmd)
+    # Launch simulator with output capture
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        bufsize=1
+    )
+    pid = proc.pid
     _launched_processes.append(proc)
-    print(f"DonkeySim launched with scene '{scene}' on port {port} (PID: {proc.pid})")
+    print(f"Simulator process started (PID: {pid})")
+    
+    # Read output to find the actual port the simulator is using
+    # Look for "Simulation Server Listening on: HOSTNAME:PORT"
+    max_wait_time = 10.0  # Maximum time to wait for port message
+    start_time = time.time()
+    port_pattern = re.compile(r"Simulation Server Listening on: [^:]+:(\d+)")
+    
+    while time.time() - start_time < max_wait_time:
+        if proc.poll() is not None:
+            # Process has terminated, read remaining output
+            output = proc.stdout.read()
+            if output:
+                match = port_pattern.search(output)
+                if match:
+                    port = int(match.group(1))
+                    break
+            raise RuntimeError(f"Simulator process terminated before starting (exit code: {proc.returncode})")
+        
+        # Try to read a line
+        line = proc.stdout.readline()
+        if line:
+            match = port_pattern.search(line)
+            if match:
+                port = int(match.group(1))
+                print(f"Simulator listening on port {port} (PID: {pid})")
+                break
+        else:
+            # No data available yet, sleep briefly to avoid busy-waiting
+            time.sleep(0.1)
+    
+    if time.time() - start_time >= max_wait_time:
+        # Fallback: use the requested port if we couldn't parse it
+        print(f"Warning: Could not parse port from simulator output, using requested port {port} (PID: {pid})")
+    
+    print(f"DonkeySim launched with scene '{scene}' on port {port} (PID: {pid})")
+    
+    # Track this simulator by both the requested port and actual port
+    # This allows reuse when the same port is requested again
+    _port_to_simulator[requested_port] = (proc, port)
+    if port != requested_port:
+        # Also track by actual port if it differs
+        _port_to_simulator[port] = (proc, port)
+    
     return proc, port
 
 
@@ -184,6 +263,13 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
     Raises:
         ValueError: If env_name is not recognized or scene name is invalid
     """
+    # DEBUG: Print stack trace to see where this is being called from
+    print(f"\n[DEBUG] start_sim called for env_name={env_name}, port={port}")
+    print("[DEBUG] Call stack:")
+    for line in traceback.format_stack()[-5:-1]:  # Show last 4 frames (excluding this one)
+        print(f"  {line.strip()}")
+    print()
+    
     # Map environment name to scene name
     if env_name not in ENV_NAME_TO_SCENE:
         valid_envs = ", ".join(sorted(ENV_NAME_TO_SCENE.keys()))
@@ -198,13 +284,30 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
     if conf is not None and "exe_path" in conf:
         sim_path = conf["exe_path"]
     
-    # Launch simulator instance
-    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port, debug=debug)
+    # Launch simulator instance (this may reuse an existing simulator)
+    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port)
+    
+    # Check if we already have an environment for this (env_name, port) combination
+    # Do this after launch_simulator so we use the actual port
+    cache_key = (env_name, port)
+    if cache_key in _env_cache:
+        env = _env_cache[cache_key]
+        # Verify the environment is still valid (hasn't been closed)
+        if hasattr(env, 'unwrapped') and hasattr(env.unwrapped, 'viewer'):
+            print(f"[DEBUG] Reusing cached environment for {env_name} on port {port}")
+            return env
+        else:
+            # Environment was closed, remove from cache
+            print(f"[DEBUG] Cached environment was closed, creating new one")
+            del _env_cache[cache_key]
     
     # Wait for simulator to start (if it was launched)
     if proc is not None:
         start_delay = conf.get("start_delay", 5.0) if conf is not None else 5.0
         time.sleep(start_delay)
+    
+    # Get policy name from conf if provided, otherwise default to "agent"
+    policy_name = conf.get("policy_name", "agent") if conf else "agent"
     
     # Prepare configuration for gym environment
     default_conf = {
@@ -212,32 +315,47 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
         "port": port,
         "body_style": "donkey",
         "body_rgb": (128, 128, 128),
-        "car_name": f"agent_{port}",
+        "car_name": policy_name,
         "font_size": 100,
-        "racer_name": "PPO_Puffer",
+        "racer_name": f"{policy_name.upper()}_Puffer",
         "country": "USA",
-        "bio": "Learning to drive w PufferLib PPO",
+        "bio": f"Learning to drive w PufferLib {policy_name.upper()}",
         "guid": str(uuid.uuid4()),
         "max_cte": 10,
     }
     
     # Merge user-provided conf with defaults
     if conf is not None:
-        # First remove exe_path from the user's conf before merging
-        # This prevents it from being included in merged_conf
-        conf_without_exe = {k: v for k, v in conf.items() if k != "exe_path"}
-        merged_conf = {**default_conf, **conf_without_exe}
+        # Remove exe_path and policy_name from the user's conf before merging
+        # exe_path prevents DonkeyEnv from launching another simulator
+        # policy_name is only used for naming, not a valid gym config parameter
+        conf_filtered = {k: v for k, v in conf.items() if k not in ["exe_path", "policy_name"]}
+        merged_conf = {**default_conf, **conf_filtered}
         # Ensure port is set correctly
         merged_conf["port"] = port
     else:
         merged_conf = default_conf
     
-    # Double-check that exe_path is not in the config
+    # Double-check that exe_path and policy_name are not in the config
     # This is critical to prevent DonkeyEnv from launching another simulator
     if "exe_path" in merged_conf:
+        print(f"[DEBUG] WARNING: exe_path found in merged_conf, removing it. Keys: {list(merged_conf.keys())}")
         del merged_conf["exe_path"]
+    if "policy_name" in merged_conf:
+        del merged_conf["policy_name"]
+    
+    print(f"[DEBUG] Creating gym environment with conf keys: {list(merged_conf.keys())}")
+    print(f"[DEBUG] Conf port: {merged_conf.get('port')}, conf host: {merged_conf.get('host')}")
     
     # Create gym environment
+    print(f"[DEBUG] Calling gym.make({env_name}, conf=merged_conf)")
     env = gym.make(env_name, conf=merged_conf)
+    print(f"[DEBUG] gym.make completed, calling env.reset()")
     env.reset()
+    print(f"[DEBUG] env.reset() completed")
+    
+    # Cache the environment for reuse
+    _env_cache[cache_key] = env
+    print(f"[DEBUG] Cached environment for {env_name} on port {port}")
+    
     return env

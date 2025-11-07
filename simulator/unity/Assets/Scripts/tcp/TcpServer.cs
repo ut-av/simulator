@@ -193,15 +193,12 @@ namespace tk
 
                     if (currentPort != originalPort)
                     {
-                        Debug.Log($"Port {originalPort} was in use. Server Listening on: {ip}:{currentPort}");
+                        Debug.Log($"Port {originalPort} was in use");
                         // Update GlobalState with the actual bound port
                         GlobalState.port = currentPort;
                         boundPort = currentPort;
                     }
-                    else
-                    {
-                        Debug.Log("Server Listening on: " + ip + ":" + currentPort.ToString());
-                    }
+                    Debug.Log("Simulation Server Listening on: " + ip + ":" + GlobalState.port.ToString());
                 }
                 catch (SocketException e)
                 {

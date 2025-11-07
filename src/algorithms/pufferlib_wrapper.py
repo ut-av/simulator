@@ -109,6 +109,7 @@ def make_vectorized_env(
     num_envs: int = 4,
     start_port: int = 9091,
     backend: str = "serial",
+    policy_name: str = "agent",
 ):
     """
     Create a vectorized environment with multiple DonkeyEnv instances
@@ -118,6 +119,7 @@ def make_vectorized_env(
         num_envs: Number of parallel environments
         start_port: Starting port number (each env gets start_port + i)
         backend: Vectorization backend - "serial", "multiprocessing", or "ray"
+        policy_name: Name of the policy (e.g., "ppo", "sac") - used for car naming
     
     Returns:
         PufferLib vectorized environment
@@ -129,20 +131,18 @@ def make_vectorized_env(
     for i in range(num_envs):
         port = start_port + i
         
-        def make_env(port=port, **kwargs):  # Capture port in closure, accept kwargs from pufferlib (buf, seed, etc.)
+        def make_env(port=port, policy_name=policy_name, **kwargs):  # Capture port and policy_name in closure, accept kwargs from pufferlib (buf, seed, etc.)
             def env_creator():
                 conf = {
                     "host": "127.0.0.1",
                     "port": port,
                     "body_style": "donkey",
                     "body_rgb": (128, 128, 128),
-                    "car_name": f"agent_{port}",
                     "font_size": 100,
-                    "racer_name": f"PPO_Puffer_{port}",
                     "country": "USA",
-                    "bio": "Learning to drive w PufferLib PPO",
                     "guid": str(uuid.uuid4()),
                     "max_cte": 10,
+                    "policy_name": policy_name,  # Pass policy name to start_sim
                 }
                 # Use start_sim to launch simulator and create environment
                 env = start_sim(env_name=env_name, port=port, conf=conf)
