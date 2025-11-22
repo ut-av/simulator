@@ -73,6 +73,12 @@ class PPOConfig:
     seed: int = 1
     torch_deterministic: bool = True
     visualize: bool = False
+    
+    # Playback mode
+    playback: bool = False
+    model_path: Optional[str] = None
+    num_episodes: int = 10  # Number of episodes to run in playback mode
+    deterministic: bool = True  # Use mean action (no sampling) in playback
 
 
 class CNNActorCritic(nn.Module):
@@ -249,6 +255,15 @@ class PPOTrainer:
             algorithm_name="PPO",
             port=config.start_port
         ) if config.visualize else None
+    
+    def load_model(self, model_path: str):
+        """Load a saved model checkpoint"""
+        print(f"Loading model from {model_path}...")
+        checkpoint = torch.load(model_path, map_location=self.device)
+        self.agent.load_state_dict(checkpoint["model_state_dict"])
+        self.global_step = checkpoint.get("global_step", 0)
+        self.update = checkpoint.get("update", 0)
+        print(f"Model loaded successfully (update: {self.update}, global_step: {self.global_step})")
         
     def collect_rollouts(self):
         """Collect rollouts from the environment"""
@@ -304,7 +319,7 @@ class PPOTrainer:
                 value,
             )
             
-            # Update for next iteration
+            # Update for next iteration - vectorized envs auto-reset, so next_obs_np contains reset obs for done envs
             next_obs = prepare_observation(next_obs_np, self.device)
             next_done = torch.tensor(done, dtype=torch.float32).to(self.device)
             
@@ -519,26 +534,235 @@ class PPOTrainer:
         total_time = time.time() - start_time
         print(f"\nTraining complete! Total time: {total_time:.2f}s")
         print(f"Average SPS: {int(self.config.total_timesteps / total_time)}")
+    
+    def playback(self):
+        """Run playback of a trained model"""
+        print(f"\n{'='*60}")
+        print(f"Starting PPO playback mode")
+        print(f"{'='*60}")
+        print(f"Model: {self.config.model_path}")
+        print(f"Num episodes: {self.config.num_episodes}")
+        print(f"Deterministic: {self.config.deterministic}")
+        print(f"Device: {self.device}")
+        print(f"{'='*60}\n")
+        
+        # Load the model
+        if self.config.model_path:
+            self.load_model(self.config.model_path)
+        else:
+            raise ValueError("model_path must be specified for playback mode")
+        
+        # Set agent to evaluation mode
+        self.agent.eval()
+        
+        # Episode tracking
+        episode_count = 0
+        episode_metrics = EpisodeMetricsLogger()
+        
+        # Reset environment
+        reset_result = self.envs.reset()
+        if isinstance(reset_result, tuple):
+            obs = reset_result[0]
+        else:
+            obs = reset_result
+        obs = prepare_observation(obs, self.device)
+        
+        step_count = 0
+        start_time = time.time()
+        
+        # Run episodes
+        while episode_count < self.config.num_episodes:
+            step_count += self.config.num_envs
+            
+            # Get action from policy
+            with torch.no_grad():
+                if self.config.deterministic:
+                    # Use mean action (no sampling)
+                    features = self.agent.feature_extractor(obs)
+                    action = self.agent.actor_mean(features)
+                else:
+                    # Sample from distribution
+                    action, _, _, _ = self.agent.get_action_and_value(obs)
+            
+            # Convert and clip actions
+            action_np = clip_action_to_space(action, self.envs.single_action_space)
+            
+            # Step environment
+            next_obs_np, reward, terminated, truncated, info = self.envs.step(action_np)
+            done = np.logical_or(terminated, truncated)
+            
+            # Visualization (show first environment)
+            if self.visualize and self.visualizer is not None:
+                vis_obs = obs[0] if self.config.num_envs > 1 else obs
+                if hasattr(vis_obs, 'cpu'):
+                    vis_obs = vis_obs.cpu().numpy()
+                vis_action = action[0] if self.config.num_envs > 1 else action
+                vis_clipped_action = action_np[0] if self.config.num_envs > 1 else action_np
+                vis_reward = reward[0] if isinstance(reward, (np.ndarray, list)) else reward
+                if not self.visualizer.update(vis_obs, vis_action, vis_clipped_action, vis_reward):
+                    # User closed window
+                    print("\nVisualization window closed. Stopping playback.")
+                    break
+            
+            # Update observation - vectorized envs auto-reset, so next_obs_np contains reset obs for done envs
+            obs = prepare_observation(next_obs_np, self.device)
+            
+            # Log episode metrics after updating observation
+            for idx, d in enumerate(done):
+                if d:
+                    metrics = extract_episode_metrics(info, idx, d)
+                    if metrics:
+                        episode_metrics.add_metrics(metrics)
+                        episode_count += 1
+                        
+                        # Print detailed episode summary
+                        print(f"\n{'='*60}")
+                        print(f"Episode {episode_count}/{self.config.num_episodes} Complete")
+                        print(f"{'='*60}")
+                        
+                        # Core metrics
+                        if 'reward' in metrics:
+                            print(f"  Return: {metrics['reward']:.2f}")
+                        if 'length' in metrics:
+                            print(f"  Length: {metrics['length']} steps")
+                        
+                        # Lap metrics
+                        if 'lap_count' in metrics:
+                            print(f"  Laps Completed: {metrics['lap_count']}")
+                        if 'lap_time' in metrics:
+                            print(f"  Last Lap Time: {metrics['lap_time']:.2f}s")
+                        
+                        # Driving performance
+                        if 'cte' in metrics:
+                            print(f"  Avg Cross-Track Error: {metrics['cte']:.3f}")
+                        if 'speed' in metrics:
+                            print(f"  Avg Speed: {metrics['speed']:.2f}")
+                        if 'forward_vel' in metrics:
+                            print(f"  Avg Forward Velocity: {metrics['forward_vel']:.2f}")
+                        if 'hit' in metrics:
+                            collision_status = "Yes" if metrics['hit'] > 0 else "No"
+                            print(f"  Collision: {collision_status}")
+                        
+                        print(f"{'='*60}\n")
+                        
+                        # Check if we've completed all episodes
+                        if episode_count >= self.config.num_episodes:
+                            break
+            
+            # Break if all requested episodes are done
+            if episode_count >= self.config.num_episodes:
+                break
+        
+        # Print final summary
+        total_time = time.time() - start_time
+        print(f"\n{'='*60}")
+        print(f"PLAYBACK COMPLETE - AGGREGATE STATISTICS")
+        print(f"{'='*60}")
+        print(f"Total Episodes: {episode_count}")
+        print(f"Total Steps: {step_count}")
+        print(f"Total Time: {total_time:.2f}s")
+        print(f"Average SPS: {int(step_count / total_time) if total_time > 0 else 0}")
+        print(f"{'='*60}")
+        
+        # Print detailed aggregate statistics
+        metrics_dict = episode_metrics.get_metrics_dict()
+        
+        # Episode Performance
+        if len(metrics_dict['episode_rewards']) > 0:
+            rewards = np.array(metrics_dict['episode_rewards'])
+            lengths = np.array(metrics_dict['episode_lengths'])
+            print(f"\nEpisode Performance:")
+            print(f"  Return:  Mean={np.mean(rewards):.2f}, Std={np.std(rewards):.2f}, "
+                  f"Min={np.min(rewards):.2f}, Max={np.max(rewards):.2f}")
+            print(f"  Length:  Mean={np.mean(lengths):.1f}, Std={np.std(lengths):.1f}, "
+                  f"Min={int(np.min(lengths))}, Max={int(np.max(lengths))}")
+        
+        # Lap Performance
+        if len(metrics_dict['episode_lap_counts']) > 0:
+            lap_counts = np.array(metrics_dict['episode_lap_counts'])
+            total_laps = int(np.sum(lap_counts))
+            print(f"\nLap Performance:")
+            print(f"  Total Laps Completed: {total_laps}")
+            print(f"  Avg Laps per Episode: {np.mean(lap_counts):.2f}")
+            print(f"  Episodes with Laps: {np.count_nonzero(lap_counts)}/{len(lap_counts)}")
+            
+            if len(metrics_dict['episode_lap_times']) > 0:
+                lap_times = np.array(metrics_dict['episode_lap_times'])
+                print(f"  Best Lap Time: {np.min(lap_times):.2f}s")
+                print(f"  Mean Lap Time: {np.mean(lap_times):.2f}s ± {np.std(lap_times):.2f}s")
+                print(f"  Worst Lap Time: {np.max(lap_times):.2f}s")
+        
+        # Driving Performance
+        if len(metrics_dict['episode_cte']) > 0:
+            cte = np.array(metrics_dict['episode_cte'])
+            speeds = np.array(metrics_dict['episode_speed'])
+            print(f"\nDriving Performance:")
+            print(f"  Cross-Track Error: Mean={np.mean(cte):.3f}, Std={np.std(cte):.3f}, "
+                  f"Min={np.min(cte):.3f}, Max={np.max(cte):.3f}")
+            print(f"  Speed: Mean={np.mean(speeds):.2f}, Std={np.std(speeds):.2f}, "
+                  f"Min={np.min(speeds):.2f}, Max={np.max(speeds):.2f}")
+            
+            if len(metrics_dict['episode_forward_vel']) > 0:
+                fwd_vel = np.array(metrics_dict['episode_forward_vel'])
+                print(f"  Forward Velocity: Mean={np.mean(fwd_vel):.2f}, Std={np.std(fwd_vel):.2f}")
+        
+        # Collision Statistics
+        if len(metrics_dict['episode_hits']) > 0:
+            hits = np.array(metrics_dict['episode_hits'])
+            collision_rate = np.mean(hits) * 100
+            num_collisions = int(np.sum(hits))
+            print(f"\nCollision Statistics:")
+            print(f"  Collision Rate: {collision_rate:.1f}%")
+            print(f"  Episodes with Collisions: {num_collisions}/{len(hits)}")
+        
+        print(f"{'='*60}\n")
+        
+        # Cleanup
+        self.envs.close()
+        if self.visualizer is not None:
+            self.visualizer.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PPO training with PufferLib")
+    parser = argparse.ArgumentParser(description="PPO training/playback with PufferLib")
+    
+    # Mode selection
+    parser.add_argument("--playback", action="store_true", help="run playback mode instead of training")
+    parser.add_argument("--model-path", type=str, help="path to saved model checkpoint (required for playback)")
+    parser.add_argument("--num-episodes", type=int, default=10, help="number of episodes to run in playback mode")
+    parser.add_argument("--deterministic", action="store_true", default=True, help="use deterministic policy (mean action) in playback")
+    parser.add_argument("--stochastic", dest="deterministic", action="store_false", help="use stochastic policy (sample actions) in playback")
+    
+    # Environment
     parser.add_argument("--env-name", type=str, default="donkey-circuit-launch-track-v0")
     parser.add_argument("--num-envs", type=int, default=4)
     parser.add_argument("--start-port", type=int, default=9091)
     parser.add_argument("--backend", type=str, default="serial", choices=["serial", "multiprocessing", "ray"])
+    
+    # Training
     parser.add_argument("--total-timesteps", type=int, default=1000000)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--num-steps", type=int, default=2048)
+    
+    # Misc
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--visualize", action="store_true", help="enable pygame visualization window during training")
+    parser.add_argument("--visualize", action="store_true", help="enable pygame visualization window")
     args = parser.parse_args()
+    
+    # In playback mode, default to 1 environment if not explicitly specified
+    num_envs = args.num_envs
+    if args.playback and args.num_envs == 4:  # 4 is the default
+        # Check if user explicitly set num_envs
+        import sys
+        if '--num-envs' not in sys.argv:
+            num_envs = 1
+            print("Playback mode: defaulting to 1 environment (use --num-envs to override)")
     
     # Create config
     config = PPOConfig(
         env_name=args.env_name,
-        num_envs=args.num_envs,
+        num_envs=num_envs,
         start_port=args.start_port,
         backend=args.backend,
         total_timesteps=args.total_timesteps,
@@ -547,11 +771,20 @@ def main():
         device=args.device,
         seed=args.seed,
         visualize=args.visualize,
+        playback=args.playback,
+        model_path=args.model_path,
+        num_episodes=args.num_episodes,
+        deterministic=args.deterministic,
     )
     
-    # Create trainer and train
+    # Create trainer
     trainer = PPOTrainer(config)
-    trainer.train()
+    
+    # Run playback or training
+    if config.playback:
+        trainer.playback()
+    else:
+        trainer.train()
 
 
 if __name__ == "__main__":

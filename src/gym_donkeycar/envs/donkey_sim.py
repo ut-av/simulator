@@ -148,12 +148,14 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.missed_checkpoint = False
         self.dq = False
         self.over = False
+        self.reset_complete = False
         self.client = None
         self.fns = {
             "telemetry": self.on_telemetry,
             "scene_selection_ready": self.on_scene_selection_ready,
             "scene_names": self.on_recv_scene_names,
             "car_loaded": self.on_car_loaded,
+            "car_reset_done": self.on_car_reset_done,
             "cross_start": self.on_cross_start,
             "race_start": self.on_race_start,
             "race_stop": self.on_race_stop,
@@ -395,9 +397,19 @@ class DonkeyUnitySimHandler(IMesgHandler):
 
     def reset(self) -> None:
         logger.debug("reseting")
+        self.reset_complete = False
         self.send_reset_car()
+        
+        # Wait for reset confirmation from simulator
+        timeout = 5.0  # 5 second timeout
+        start_time = time.time()
+        while not self.reset_complete and (time.time() - start_time) < timeout:
+            time.sleep(0.01)
+        
+        if not self.reset_complete:
+            logger.warning("Reset confirmation not received from simulator within timeout")
+        
         self.timer.reset()
-        time.sleep(1)
         self.image_array = np.zeros(self.camera_img_size)
         self.image_array_b = None
         self.last_obs = self.image_array
@@ -633,6 +645,11 @@ class DonkeyUnitySimHandler(IMesgHandler):
         # Enable hand brake, so the car doesn't move
         self.send_control(0, 0, 1.0)
         self.on_need_car_config({})
+
+    def on_car_reset_done(self, message: Dict[str, Any]) -> None:
+        """Handle confirmation that car reset is complete"""
+        logger.debug("car reset complete")
+        self.reset_complete = True
 
     def on_recv_scene_names(self, message: Dict[str, Any]) -> None:
         if message:

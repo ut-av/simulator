@@ -275,6 +275,16 @@ namespace tk
             bResetCar = true;
         }
 
+        void SendCarResetDone()
+        {
+            if (client == null)
+                return;
+
+            JSONObject json = new JSONObject(JSONObject.Type.OBJECT);
+            json.AddField("msg_type", "car_reset_done");
+            client.SendMsg(json);
+        }
+
         void OnRegenRoad(JSONObject json)
         {
             //This causes the track to be regenerated with the given settings.
@@ -564,6 +574,9 @@ namespace tk
                     }
 
                     bResetCar = false;
+                    
+                    // Send confirmation that reset is complete
+                    SendCarResetDone();
                 }
 
                 timeSinceLastCapture += Time.fixedDeltaTime;
