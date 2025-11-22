@@ -1,0 +1,72 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8283415475009066251
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3896321656951025078}
+  - component: {fileID: 1873780485286992419}
+  - component: {fileID: 236342720506183500}
+  m_Layer: 0
+  m_Name: ROS
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3896321656951025078
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8283415475009066251}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.00114, y: 0.0008, z: 0.00114}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1873780485286992419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8283415475009066251}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 643074c403efaf9f294bad6bedf8272d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UtavDriver
+  ackermannTopicName: /ackermann_curvature_drive
+  odomTopicName: /odom
+  vescDriveTopicName: /vesc_drive
+  publishRateHz: 20
+  carObj: {fileID: 0}
+  wheelbase: 0.324
+  maxSteeringAngle: 25
+  maxSpeed: 5
+  velocityToThrottleScale: 0.2
+  debugLog: 0
+--- !u!114 &236342720506183500
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8283415475009066251}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3436e31d20ce862f7a20c7fa6b1514e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RosClock
+  topicName: /clock
+  publishRateHz: 30
+  publishInFixedUpdate: 1

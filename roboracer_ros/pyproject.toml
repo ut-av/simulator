@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roboracer-ros"
+version = "0.1.0"
+description = "ROS interface for controlling RoboRacer simulation"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "RoboRacer Team", email = "contact@roboracer.dev"}
+]
+
+dependencies = [
+    # ROS2 is optional - users install it separately
+]
+
+optional-dependencies = {
+    dev = [
+        "pytest>=7.0",
+        "pytest-cov>=4.0",
+        "black>=23.0",
+        "flake8>=6.0",
+        "mypy>=1.0",
+    ]
+}
+
+[project.scripts]
+roboracer-cli = "roboracer_ros.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ut-av/roboracer"
+Documentation = "https://github.com/ut-av/roboracer/wiki"
+Repository = "https://github.com/ut-av/roboracer.git"
+Issues = "https://github.com/ut-av/roboracer/issues"
+
+[tool.setuptools]
+packages = ["roboracer_ros"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

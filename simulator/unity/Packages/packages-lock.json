@@ -20,7 +20,7 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.collab-proxy": {
-      "version": "2.10.1",
+      "version": "2.10.2",
       "depth": 0,
       "source": "registry",
       "dependencies": {},
@@ -121,6 +121,13 @@
         "com.unity.mathematics": "1.2.4",
         "com.unity.modules.terrain": "1.0.0"
       }
+    },
+    "com.unity.robotics.ros-tcp-connector": {
+      "version": "https://github.com/hijimasa/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "8f04ffd36195d7f634c32c7b0aeaca477a21e099"
     },
     "com.unity.searcher": {
       "version": "4.9.3",

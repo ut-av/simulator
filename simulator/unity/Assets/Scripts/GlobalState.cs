@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
 
 
 public static class GlobalState
@@ -34,4 +35,9 @@ public static class GlobalState
     public static List<AssetBundle> bundleScenes = new List<AssetBundle>();
     public static bool drawLidar = true;
     public static float timeOut = 300f;
+    
+    // ROS TCP Connection settings
+    public static bool rosEnabled = false;
+    public static int rosPort = 10000;
+    public static ROSConnection rosConnection = null;
 }

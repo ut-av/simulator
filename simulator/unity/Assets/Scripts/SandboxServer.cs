@@ -23,6 +23,7 @@ public class SandboxServer : MonoBehaviour
     
     bool argHost = false;
     bool argPort = false;
+    bool argRos = false;
 
     // Track which clients are using which API
     private Dictionary<tk.TcpClient, ClientAPIType> clientAPITypes = new Dictionary<tk.TcpClient, ClientAPIType>();
@@ -50,11 +51,32 @@ public class SandboxServer : MonoBehaviour
                 port = int.Parse(args[i + 1]);
                 argPort = true;
             }
+            else if (args[i] == "--ros")
+            {
+                argRos = true;
+                GlobalState.rosEnabled = true;
+            }
             // Note: --scene/--environment is handled by CommandLineArgsHandler component
         }
 
         if (argHost == false) { host = GlobalState.host; }
         if (argPort == false) { port = GlobalState.port; }
+        
+        // Configure ROS if enabled
+        if (argRos)
+        {
+            ConfigureROS();
+        }
+    }
+    
+    private void ConfigureROS()
+    {
+        // Extract the port suffix (last 2 digits) and add to 10000
+        // For example, port 9091 -> suffix 91 -> ROS port 10091
+        int portSuffix = port % 100;
+        GlobalState.rosPort = 10000 + portSuffix;
+        
+        Debug.Log($"ROS enabled: configuring ROSConnection on port {GlobalState.rosPort}");
     }
 
     private void Awake()
@@ -62,8 +84,33 @@ public class SandboxServer : MonoBehaviour
         CheckCommandLineConnectArgs();
         Debug.Log($"Unified Sandbox Server starting on {host}:{port}");
         Debug.Log("Supports: Track API and Menu API simultaneously");
+        
+        // Initialize ROS connection if enabled
+        if (GlobalState.rosEnabled)
+        {
+            InitializeROSConnection();
+        }
 
         _server = GetComponent<tk.TcpServer>();
+    }
+    
+    private void InitializeROSConnection()
+    {
+        // Get or create the ROSConnection instance
+        GlobalState.rosConnection = Unity.Robotics.ROSTCPConnector.ROSConnection.GetOrCreateInstance();
+        
+        if (GlobalState.rosConnection != null)
+        {
+            // Configure the ROSConnection with the calculated port
+            GlobalState.rosConnection.RosIPAddress = "127.0.0.1";
+            GlobalState.rosConnection.RosPort = GlobalState.rosPort;
+            
+            Debug.Log($"ROSConnection initialized: 127.0.0.1:{GlobalState.rosPort}");
+        }
+        else
+        {
+            Debug.LogError("Failed to create ROSConnection");
+        }
     }
 
     // Start is called before the first frame update
