@@ -93,6 +93,7 @@ def make_donkey_env(env_name: str = "donkey-circuit-launch-track-v0", port: int 
             "bio": "Learning to drive w PufferLib PPO",
             "guid": str(uuid.uuid4()),
             "max_cte": 10,
+            "max_speed": 2.0,
         }
         # Use start_sim to launch simulator and create environment
         env = start_sim(env_name=env_name, port=port, conf=conf)
@@ -142,6 +143,7 @@ def make_vectorized_env(
                     "country": "USA",
                     "guid": str(uuid.uuid4()),
                     "max_cte": 10,
+                    "max_speed": 2.0,
                     "policy_name": policy_name,  # Pass policy name to start_sim
                 }
                 # Use start_sim to launch simulator and create environment

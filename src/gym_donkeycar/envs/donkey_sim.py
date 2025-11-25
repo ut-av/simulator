@@ -370,6 +370,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
                 conf["body_rgb"],
                 conf["car_name"],
                 conf["font_size"],
+                conf.get("max_speed", 2.0),  # Default to 10.0 if not specified
             )
 
     def set_racer_bio(self, conf: Dict[str, Any]) -> None:
@@ -704,6 +705,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
         body_rgb: Tuple[int, int, int] = (255, 255, 255),
         car_name: str = "car",
         font_size: int = 100,
+        max_speed: float = 2.0,
     ):
         """
         # body_style = "donkey" | "bare" | "car01" | "f1" | "cybertruck"
@@ -724,6 +726,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "body_b": str(body_rgb[2]),
             "car_name": car_name,
             "font_size": str(font_size),
+            "max_speed": str(max_speed),
         }
         self.blocking_send(msg)
         time.sleep(0.1)
