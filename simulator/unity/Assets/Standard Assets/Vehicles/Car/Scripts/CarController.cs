@@ -36,6 +36,7 @@ namespace UnityStandardAssets.Vehicles.Car
         [SerializeField] private float m_RevRangeBoundary = 1f;
         [SerializeField] private float m_SlipLimit;
         [SerializeField] private float m_BrakeTorque;
+        [Range(0, 1)] [SerializeField] private float m_NoThrottleBrakeFactor = 0.7f; // Braking force applied when no throttle is applied
 
         private Quaternion[] m_WheelMeshLocalRotations;
         private Vector3 m_Prevpos, m_Pos;
@@ -223,7 +224,10 @@ namespace UnityStandardAssets.Vehicles.Car
             {
                 if (CurrentSpeed > 5 && Vector3.Angle(transform.forward, m_Rigidbody.linearVelocity) < 50f)
                 {
-                    m_WheelColliders[i].brakeTorque = m_BrakeTorque*footbrake;
+                    // Apply foot brake if requested, or apply m_NoThrottleBrakeFactor braking when no throttle is applied
+                    // This matches the physics of the real roboracer 
+                    float brakeFactor = footbrake > 0 ? footbrake : (accel == 0 ? m_NoThrottleBrakeFactor : 0f);
+                    m_WheelColliders[i].brakeTorque = m_BrakeTorque*brakeFactor;
                 }
                 else if (footbrake > 0)
                 {
