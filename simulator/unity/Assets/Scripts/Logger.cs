@@ -110,7 +110,7 @@ public class Logger : MonoBehaviour {
         if(GlobalState.log_path != "default")
             return GlobalState.log_path + "/";
 
-        return Application.dataPath + "/../log/";
+        return Application.dataPath + "/../logs/";
     }
 
 	void Awake()

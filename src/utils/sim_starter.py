@@ -10,6 +10,7 @@ import sys
 import re
 import traceback
 from typing import Optional, List
+import threading
 
 # Valid scene names matching the environment classes in __init__.py
 VALID_SCENES = {
@@ -178,6 +179,7 @@ def launch_simulator(
             print(f"[DEBUG] This launch_simulator call will still proceed, but the simulator may choose a different port.")
 
     # Build command
+    abs_sim_path = os.path.abspath(sim_path)
     cmd = [
         sim_path,
         "--scene", scene,
@@ -185,6 +187,7 @@ def launch_simulator(
         "--host", host,
         "-logfile", logfile,
     ]
+    print(f"Launching simulator with command:\n  {' '.join(cmd)}")
     
     # Launch simulator with output capture
     proc = subprocess.Popen(
@@ -204,20 +207,33 @@ def launch_simulator(
     start_time = time.time()
     port_pattern = re.compile(r"Simulation Server Listening on: [^:]+:(\d+)")
     
+    # Create log file in the project's logs folder
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    log_dir = os.path.join(project_root, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_filename = os.path.join(log_dir, f"sim_output_{port}_{int(time.time())}.log")
+    print(f"Logging simulator output to: {log_filename}")
+    
+    log_file = open(log_filename, "w", encoding="utf-8")
+
     while time.time() - start_time < max_wait_time:
         if proc.poll() is not None:
             # Process has terminated, read remaining output
             output = proc.stdout.read()
             if output:
+                log_file.write(output)
                 match = port_pattern.search(output)
                 if match:
                     port = int(match.group(1))
                     break
+            log_file.close()
             raise RuntimeError(f"Simulator process terminated before starting (exit code: {proc.returncode})")
         
         # Try to read a line
         line = proc.stdout.readline()
         if line:
+            log_file.write(line)
+            log_file.flush()
             match = port_pattern.search(line)
             if match:
                 port = int(match.group(1))
@@ -226,6 +242,20 @@ def launch_simulator(
         else:
             # No data available yet, sleep briefly to avoid busy-waiting
             time.sleep(0.1)
+            
+    # Start a background thread to continue logging output
+    def log_worker():
+        try:
+            for line in proc.stdout:
+                log_file.write(line)
+                log_file.flush()
+        except Exception as e:
+            print(f"Error in simulator logger thread: {e}")
+        finally:
+            log_file.close()
+
+    t = threading.Thread(target=log_worker, daemon=True)
+    t.start()
     
     if time.time() - start_time >= max_wait_time:
         # Fallback: use the requested port if we couldn't parse it
