@@ -601,16 +601,24 @@ namespace tk
             Vector3 pathForward = baseRotation * Vector3.forward;
             Vector3 pathRight = baseRotation * Vector3.right;
             
+            // Flatten pathRight to ensure we only offset horizontally (avoiding digging into ground on banked turns)
+            pathRight.y = 0;
+            pathRight.Normalize();
+ 
             // Random offset in the range [-randomSpawnMaxCteOffset, randomSpawnMaxCteOffset]
             float lateralOffset = UnityEngine.Random.Range(-randomSpawnMaxCteOffset, randomSpawnMaxCteOffset);
-            Vector3 spawnPosition = basePosition + pathRight * lateralOffset;
+            
+            // Add a small vertical offset (0.2m) to prevent spawning inside the ground/track
+            Vector3 spawnPosition = basePosition + pathRight * lateralOffset + Vector3.up * 0.2f;
             
             Debug.Log($"[ApplyRandomSpawn] Lateral offset: {lateralOffset:F2}m, Final position: {spawnPosition}");
             
             // Apply random rotation offset around Y axis (yaw)
             float rotationOffset = UnityEngine.Random.Range(-randomSpawnMaxRotationOffset, randomSpawnMaxRotationOffset);
-            Quaternion spawnRotation = baseRotation * Quaternion.Euler(0, rotationOffset, 0);
+            // Force upright rotation (0 pitch/roll) and apply offset to yaw
+            Quaternion spawnRotation = Quaternion.Euler(0, baseRotation.eulerAngles.y + rotationOffset, 0);
             
+            Debug.Log($"[ApplyRandomSpawn] Base Rotation: {baseRotation.eulerAngles}, Base Y: {baseRotation.eulerAngles.y}");
             Debug.Log($"[ApplyRandomSpawn] Rotation offset: {rotationOffset:F1}°, Final rotation: {spawnRotation.eulerAngles}");
             
             // Set the car's position and rotation

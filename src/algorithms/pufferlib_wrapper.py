@@ -150,6 +150,18 @@ def make_vectorized_env(
                     "frame_skip": env_config.get("frame_skip", 1),
                     "max_speed": env_config.get("max_speed", float('inf')),  # Default to no limit
                     "policy_name": policy_name,  # Pass policy name to start_sim
+                    
+                    # Random spawn parameters
+                    "random_spawn_enabled": env_config.get("random_spawn_enabled", False),
+                    "random_spawn_max_cte_offset": env_config.get("random_spawn_max_cte_offset", 0.0),
+                    "random_spawn_max_rotation_offset": env_config.get("random_spawn_max_rotation_offset", 0.0),
+                    
+                    # Reward weights
+                    "reward_speed_weight": env_config.get("reward_speed_weight", 1.0),
+                    "reward_centering_weight": env_config.get("reward_centering_weight", 1.0),
+                    
+                    # Centering setpoints
+                    "centering_setpoints": env_config.get("centering_setpoints", (0.3, 0.8)),
                 }
                 # Use start_sim to launch simulator and create environment
                 env = start_sim(env_name=env_name, port=port, conf=conf)
