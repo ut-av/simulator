@@ -67,6 +67,8 @@ class PPOConfig:
     # Reward Weights
     reward_speed_weight: float = 1.0  # Weight for speed reward component
     reward_centering_weight: float = 1.0  # Weight for centering reward component
+    reward_distance_weight: float = 0.0  # Weight for distance reward component
+    reward_done_penalty: float = -1.0  # Penalty for episode termination (crash/off-track)
     reward_lin_combination: bool = False  # Use linear combination of reward terms
     
     # Centering Reward Spline
@@ -369,8 +371,11 @@ class PPOTrainer:
         # Add reward weights to env_config
         env_config["reward_speed_weight"] = config.reward_speed_weight
         env_config["reward_centering_weight"] = config.reward_centering_weight
+        env_config["reward_distance_weight"] = config.reward_distance_weight
+        env_config["reward_done_penalty"] = config.reward_done_penalty
         env_config["reward_lin_combination"] = config.reward_lin_combination
-        print(f"Reward weights: speed={config.reward_speed_weight}, centering={config.reward_centering_weight}")
+        print(f"Reward weights: speed={config.reward_speed_weight}, centering={config.reward_centering_weight}, distance={config.reward_distance_weight}")
+        print(f"Done penalty: {config.reward_done_penalty}")
         print(f"Reward linear combination: {config.reward_lin_combination}")
         
         # Add centering setpoints to env_config

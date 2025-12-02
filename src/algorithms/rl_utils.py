@@ -518,8 +518,16 @@ class EpisodeMetricsLogger:
             done_penalties = []
             off_track_penalties = []
             collision_penalties = []
+            
+            # Raw values
             speed_rewards = []
             centering_bonuses = []
+            distance_rewards = []
+            
+            # Weights
+            speed_weights = []
+            centering_weights = []
+            distance_weights = []
             
             for components in self.episode_reward_components:
                 if "done_penalty" in components:
@@ -530,8 +538,16 @@ class EpisodeMetricsLogger:
                     collision_penalties.append(components["collision_penalty"])
                 if "speed_reward" in components:
                     speed_rewards.append(components["speed_reward"])
+                    if "speed_weight" in components:
+                        speed_weights.append(components["speed_weight"])
                 if "centering_bonus" in components:
                     centering_bonuses.append(components["centering_bonus"])
+                    if "centering_weight" in components:
+                        centering_weights.append(components["centering_weight"])
+                if "distance_reward" in components:
+                    distance_rewards.append(components["distance_reward"])
+                    if "distance_weight" in components:
+                        distance_weights.append(components["distance_weight"])
             
             # Log averages
             if done_penalties:
@@ -541,9 +557,28 @@ class EpisodeMetricsLogger:
             if collision_penalties:
                 writer.add_scalar("reward_components/collision_penalty_mean", np.mean(collision_penalties), global_step)
             if speed_rewards:
-                writer.add_scalar("reward_components/speed_reward_mean", np.mean(speed_rewards), global_step)
+                raw_mean = np.mean(speed_rewards)
+                writer.add_scalar("reward_components/raw_speed_reward_mean", raw_mean, global_step)
+                if speed_weights:
+                    weight = np.mean(speed_weights)
+                    writer.add_scalar("reward_components/weight_speed_reward", weight, global_step)
+                    writer.add_scalar("reward_components/weighted_speed_reward_mean", raw_mean * weight, global_step)
+            
             if centering_bonuses:
-                writer.add_scalar("reward_components/centering_bonus_mean", np.mean(centering_bonuses), global_step)
+                raw_mean = np.mean(centering_bonuses)
+                writer.add_scalar("reward_components/raw_centering_bonus_mean", raw_mean, global_step)
+                if centering_weights:
+                    weight = np.mean(centering_weights)
+                    writer.add_scalar("reward_components/weight_centering_bonus", weight, global_step)
+                    writer.add_scalar("reward_components/weighted_centering_bonus_mean", raw_mean * weight, global_step)
+            
+            if distance_rewards:
+                raw_mean = np.mean(distance_rewards)
+                writer.add_scalar("reward_components/raw_distance_reward_mean", raw_mean, global_step)
+                if distance_weights:
+                    weight = np.mean(distance_weights)
+                    writer.add_scalar("reward_components/weight_distance_reward", weight, global_step)
+                    writer.add_scalar("reward_components/weighted_distance_reward_mean", raw_mean * weight, global_step)
     
     def print_summary(self):
         """Print summary of metrics"""
@@ -667,6 +702,7 @@ class VisualizationWindow:
             "done_penalty": [],
             "off_track_penalty": [],
             "collision_penalty": [],
+            "distance_reward": [],
         }
     
     def update(self, obs, action, clipped_action, reward, diagnostic_data=None):
@@ -888,10 +924,11 @@ class VisualizationWindow:
             if reward_comp:
                 comp_y = flag_y + 25
                 comp_texts = [
-                    f"Speed: {reward_comp.get('speed_reward', 0.0):.2f}",
-                    f"Center: {reward_comp.get('centering_bonus', 0.0):.2f}",
+                    f"Speed: {reward_comp.get('speed_reward', 0.0):.2f} (x{reward_comp.get('speed_weight', 1.0):.1f})",
+                    f"Center: {reward_comp.get('centering_bonus', 0.0):.2f} (x{reward_comp.get('centering_weight', 1.0):.1f})",
                     f"Done: {reward_comp.get('done_penalty', 0.0):.2f}",
                     f"OffTrack: {reward_comp.get('off_track_penalty', 0.0):.2f}",
+                    f"Dist: {reward_comp.get('distance_reward', 0.0):.2f} (x{reward_comp.get('distance_weight', 1.0):.1f})",
                 ]
                 for i, text in enumerate(comp_texts):
                     comp_surf = self.font.render(text, True, (100, 200, 100))
@@ -917,7 +954,7 @@ class VisualizationWindow:
         
         # Draw plots
         self._draw_reward_plot(self.scaled_w, self.scaled_h + self.ui_height)
-        self._draw_reward_components_plot(self.scaled_w, self.scaled_h + self.ui_height)
+        self._draw_reward_components_plot(self.scaled_w, self.scaled_h + self.ui_height, reward_comp)
         
         pygame.display.flip()
         
@@ -971,11 +1008,14 @@ class VisualizationWindow:
         max_text = self.small_font.render(f"Max: {max_reward:.2f}", True, (150, 150, 150))
         self.screen.blit(max_text, (plot_x + 5, plot_y + plot_height + 25))
     
-    def _draw_reward_components_plot(self, screen_width, screen_height):
+    def _draw_reward_components_plot(self, screen_width, screen_height, current_components=None):
         """Draw individual reward component plots"""
         # Skip if not enough data
         if len(self.reward_history) < 2:
             return
+            
+        if current_components is None:
+            current_components = {}
         
         # Plot configuration - bottom row dedicated to component plots
         plot_width = 160
@@ -994,6 +1034,7 @@ class VisualizationWindow:
             ("done_penalty", "Done Penalty", (255, 100, 100)),
             ("off_track_penalty", "Off-Track Penalty", (255, 150, 0)),
             ("collision_penalty", "Collision Penalty", (255, 0, 0)),
+            ("distance_reward", "Distance Reward", (0, 255, 255)),
         ]
         
         # Draw each component plot
@@ -1039,6 +1080,13 @@ class VisualizationWindow:
             # Draw labels
             title = self.small_font.render(label, True, color)
             self.screen.blit(title, (plot_x + 3, plot_y - 18))
+            
+            # Show weight if available
+            weight_key = key.replace("_reward", "_weight").replace("_bonus", "_weight")
+            if "penalty" not in key and weight_key in current_components:
+                weight = current_components[weight_key]
+                weight_text = self.small_font.render(f"x{weight:.1f}", True, (150, 150, 150))
+                self.screen.blit(weight_text, (plot_x + 3, plot_y - 32))
             
             # Current value
             current_val = history[-1] if history else 0.0

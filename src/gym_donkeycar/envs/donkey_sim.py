@@ -152,6 +152,12 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.random_spawn_max_cte_offset = conf.get("random_spawn_max_cte_offset", 0.0)  # Max distance from centerline
         self.random_spawn_max_rotation_offset = conf.get("random_spawn_max_rotation_offset", 0.0)  # Max rotation offset in degrees
         
+        # Distance reward weight
+        self.reward_distance_weight = conf.get("reward_distance_weight", 0.0)
+        
+        # Done penalty
+        self.reward_done_penalty = conf.get("reward_done_penalty", -1.0)
+        
         # Debug: Print random spawn configuration
         print(f"[DonkeyEnv] Random spawn configuration:")
         print(f"  random_spawn_enabled: {self.random_spawn_enabled}")
@@ -239,8 +245,16 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "collision_penalty": 0.0,
             "speed_reward": 0.0,
             "centering_bonus": 0.0,
+            "distance_reward": 0.0,
             "total_reward": 0.0,
+            "speed_weight": self.reward_speed_weight,
+            "centering_weight": self.reward_centering_weight,
+            "distance_weight": self.reward_distance_weight,
         }
+        
+        self.total_distance = 0.0
+        self.last_pos = None
+        self.dist_since_last_reward = 0.0
 
     def on_connect(self, client: SimClient) -> None:  # pytype: disable=signature-mismatch
         logger.debug("socket connected")
@@ -266,7 +280,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
             if self.start_position is None:
                 self.start_position = (self.x, self.y, self.z)
                 self.start_yaw = self.yaw
-                logger.info(f"Starting position set: pos=({self.x:.2f}, {self.y:.2f}, {self.z:.2f}), yaw={self.yaw:.1f}°")
+                #logger.info(f"Starting position set: pos=({self.x:.2f}, {self.y:.2f}, {self.z:.2f}), yaw={self.yaw:.1f}°")
         elif self.starting_line_index == message["starting_line_index"]:
             time_at_crossing = message["timeStamp"]
             self.last_lap_time = float(time_at_crossing - self.current_lap_time)
@@ -565,8 +579,16 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "collision_penalty": 0.0,
             "speed_reward": 0.0,
             "centering_bonus": 0.0,
+            "distance_reward": 0.0,
             "total_reward": 0.0,
+            "speed_weight": self.reward_speed_weight,
+            "centering_weight": self.reward_centering_weight,
+            "distance_weight": self.reward_distance_weight,
         }
+        
+        self.total_distance = 0.0
+        self.last_pos = None
+        self.dist_since_last_reward = 0.0
 
     def get_sensor_size(self) -> Tuple[int, int, int]:
         return self.camera_img_size
@@ -613,7 +635,9 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "car_fully_crossed": self.car_fully_crossed,
             "reward_components": self.reward_components.copy(),
             "missed_checkpoint": self.missed_checkpoint,
+            "missed_checkpoint": self.missed_checkpoint,
             "dq": self.dq,
+            "total_distance": self.total_distance,
         }
 
         # Add the second image to the dict
@@ -641,8 +665,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
         Calculate reward and track components for logging.
         
         Reward components:
-        - Done penalty: -1.0 if episode marked as done
-        - Off-track penalty: -1.0 if CTE exceeds max_cte.
+        - Done penalty: reward_done_penalty if episode marked as done
+        - Off-track penalty: reward_done_penalty if CTE exceeds max_cte.
           CTE (Cross Track Error) is provided by the simulator and represents the 
           lateral distance from the track center. We penalize high CTE to encourage 
           the agent to stay within the track boundaries and follow the optimal line.
@@ -665,20 +689,30 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "collision_penalty": 0.0,
             "speed_reward": 0.0,
             "centering_bonus": 0.0,
+            "distance_reward": 0.0,
             "total_reward": 0.0,
+            "speed_weight": self.reward_speed_weight,
+            "centering_weight": self.reward_centering_weight,
+            "distance_weight": self.reward_distance_weight,
         }
+        
+        # Calculate distance reward
+        raw_distance = self.dist_since_last_reward
+        weighted_distance = raw_distance * self.reward_distance_weight
+        self.dist_since_last_reward = 0.0  # Reset accumulator
+        self.reward_components["distance_reward"] = raw_distance
         
         reward = 0.0
 
         if done:
-            self.reward_components["done_penalty"] = -1.0
-            reward = -1.0
+            self.reward_components["done_penalty"] = self.reward_done_penalty
+            reward = self.reward_done_penalty
             self.reward_components["total_reward"] = reward
             return reward
 
         if self.cte > self.max_cte:
-            self.reward_components["off_track_penalty"] = -1.0
-            reward = -1.0
+            self.reward_components["off_track_penalty"] = self.reward_done_penalty
+            reward = self.reward_done_penalty
             self.reward_components["total_reward"] = reward
             return reward
 
@@ -720,13 +754,21 @@ class DonkeyUnitySimHandler(IMesgHandler):
             
             self.reward_components["speed_reward"] = speed_reward
             self.reward_components["centering_bonus"] = centering_bonus
+            
+            # Add distance reward
+            reward += weighted_distance
+            
             self.reward_components["total_reward"] = reward
             return reward
 
         # In reverse, reward doesn't have centering term (prevents exploits)
         self.reward_components["speed_reward"] = self.forward_vel
-        self.reward_components["total_reward"] = self.forward_vel
-        return self.forward_vel
+        
+        # Add distance reward
+        reward = self.forward_vel + weighted_distance
+        
+        self.reward_components["total_reward"] = reward
+        return reward
 
     # ------ Socket interface ----------- #
 
@@ -747,6 +789,18 @@ class DonkeyUnitySimHandler(IMesgHandler):
             self.x = message["pos_x"]
             self.y = message["pos_y"]
             self.z = message["pos_z"]
+            
+            # Update distance traveled
+            if self.last_pos is not None:
+                dist = math.sqrt(
+                    (self.x - self.last_pos[0])**2 + 
+                    (self.y - self.last_pos[1])**2 + 
+                    (self.z - self.last_pos[2])**2
+                )
+                self.total_distance += dist
+                self.dist_since_last_reward += dist
+            
+            self.last_pos = (self.x, self.y, self.z)
 
         if "speed" in message:
             self.speed = message["speed"]
@@ -859,7 +913,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
             if not self.over:
                 logger.debug(f"game over: cte {self.cte}, max_cte {self.max_cte}")
                 if self.car_fully_crossed:
-                    logger.info(f"Car fully crossed the line: CTE={self.cte:.2f}")
+                    logger.debug(f"Car fully crossed the line: CTE={self.cte:.2f}")
                     self.termination_reason = "car_fully_crossed"
                 else:
                     self.termination_reason = "off_track"
@@ -908,7 +962,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
 
     def on_car_reset_done(self, message: Dict[str, Any]) -> None:
         """Handle confirmation that car reset is complete"""
-        logger.info("car reset complete (msg received)")
+        logger.debug("car reset complete (msg received)")
         self.reset_complete = True
 
     def on_recv_scene_names(self, message: Dict[str, Any]) -> None:
@@ -948,9 +1002,10 @@ class DonkeyUnitySimHandler(IMesgHandler):
             msg["random_spawn_enabled"] = "true"
             msg["random_spawn_max_cte_offset"] = str(self.random_spawn_max_cte_offset)
             msg["random_spawn_max_rotation_offset"] = str(self.random_spawn_max_rotation_offset)
-            print(f"[DonkeyEnv] Sending reset_car with random spawn: cte_offset={self.random_spawn_max_cte_offset}, rotation_offset={self.random_spawn_max_rotation_offset}")
+            #print(f"[DonkeyEnv] Sending reset_car with random spawn: cte_offset={self.random_spawn_max_cte_offset}, rotation_offset={self.random_spawn_max_rotation_offset}")
         else:
-            print(f"[DonkeyEnv] Sending reset_car WITHOUT random spawn (random_spawn_enabled={self.random_spawn_enabled})")
+            pass
+            #print(f"[DonkeyEnv] Sending reset_car WITHOUT random spawn (random_spawn_enabled={self.random_spawn_enabled})")
         
         self.queue_message(msg)
 
