@@ -105,6 +105,9 @@ public class Car : MonoBehaviour, ICar{
 		rb.position = pos;
 		rb.rotation = rot;
 
+		// Ignore collisions for 1 second after spawn/reset to allow car to settle
+		collisionGracePeriod = Time.time + 1.0f;
+
 		//just setting it once doesn't seem to work. Try setting it multiple times..
 		StartCoroutine(KeepSetting(pos, rot, 1));
 	}
@@ -255,6 +258,9 @@ public class Car : MonoBehaviour, ICar{
 		}
 	}
 
+	// grace period to ignore collisions after spawn
+	private float collisionGracePeriod = 0f;
+
 	//get the name of the last object we collided with
 	public string GetLastCollision()
 	{
@@ -268,6 +274,9 @@ public class Car : MonoBehaviour, ICar{
 
 	void OnCollisionEnter(Collision col)
 	{
+		if (Time.time < collisionGracePeriod)
+			return;
+
 		last_collision = col.gameObject.name;
 	}
 }

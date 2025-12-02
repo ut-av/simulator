@@ -625,6 +625,9 @@ namespace tk
             car.Set(spawnPosition, spawnRotation);
             
             Debug.Log($"[ApplyRandomSpawn] COMPLETE - Car spawned at node {randomNodeIndex}/{pm.carPath.nodes.Count}, lateral offset: {lateralOffset:F2}m, rotation offset: {rotationOffset:F1}°");
+            
+            // Update the active span index to the selected node so CTE calculation starts from the correct place
+            iActiveSpan = randomNodeIndex;
         }
 
         void FixedUpdate()
@@ -652,6 +655,10 @@ namespace tk
                         // Default: restore to original position
                         Debug.Log("[TcpCarHandler] Using car.RestorePosRot() - default spawn");
                         car.RestorePosRot();
+                        
+                        // Reset closest point of car path for default spawn
+                        if (pm)
+                            iActiveSpan = 0;
                     }
 
                     if (carObj != null)
@@ -660,10 +667,6 @@ namespace tk
                         car.RequestSteering(0.0f);
                         car.RequestThrottle(0.0f);
                         car.RequestFootBrake(10.0f);
-
-                        // Reset closest point of car path
-                        if (pm)
-                            iActiveSpan = 0;
                     }
 
                     bResetCar = false;
