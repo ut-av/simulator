@@ -255,6 +255,11 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.total_distance = 0.0
         self.last_pos = None
         self.dist_since_last_reward = 0.0
+        
+        # Lap timing
+        self.lap_times = []
+        self.best_lap = None
+        self.last_lap_start_time = 0.0
 
     def on_connect(self, client: SimClient) -> None:  # pytype: disable=signature-mismatch
         logger.debug("socket connected")
@@ -280,10 +285,17 @@ class DonkeyUnitySimHandler(IMesgHandler):
             if self.start_position is None:
                 self.start_position = (self.x, self.y, self.z)
                 self.start_yaw = self.yaw
+                self.last_lap_start_time = time.time()
                 #logger.info(f"Starting position set: pos=({self.x:.2f}, {self.y:.2f}, {self.z:.2f}), yaw={self.yaw:.1f}°")
         elif self.starting_line_index == message["starting_line_index"]:
             time_at_crossing = message["timeStamp"]
-            self.last_lap_time = float(time_at_crossing - self.current_lap_time)
+            potential_lap_time = float(time_at_crossing - self.current_lap_time)
+            
+            # Ignore unrealistic lap times (e.g. immediate re-triggering)
+            if potential_lap_time < 5.0:
+                return
+
+            self.last_lap_time = potential_lap_time
             self.current_lap_time = time_at_crossing
             self.lap_count += 1
             lap_msg = f"New lap time (finish line): {round(self.last_lap_time, 2)} seconds"
@@ -334,7 +346,20 @@ class DonkeyUnitySimHandler(IMesgHandler):
             # Increment lap count if we just entered the proximity zone and are pointing correctly
             if correct_direction and not self.last_proximity_check:
                 self.lap_count_proximity += 1
-                logger.info(f"Lap completed (proximity): count = {self.lap_count_proximity}, distance = {distance_to_start:.2f}m, yaw_diff = {yaw_diff:.1f}°")
+                
+                # Calculate lap time
+                current_time = time.time()
+                if self.last_lap_start_time > 0:
+                    lap_duration = current_time - self.last_lap_start_time
+                    self.lap_times.append(lap_duration)
+                    
+                    if self.best_lap is None or lap_duration < self.best_lap:
+                        self.best_lap = lap_duration
+                    
+                    logger.info(f"Lap {len(self.lap_times)} completed: {lap_duration:.2f}s (Best: {self.best_lap:.2f}s)")
+                
+                self.last_lap_start_time = current_time
+                #logger.info(f"Lap completed (proximity): count = {self.lap_count_proximity}, distance = {distance_to_start:.2f}m, yaw_diff = {yaw_diff:.1f}°")
         
         self.last_proximity_check = within_proximity
 
@@ -589,6 +614,11 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.total_distance = 0.0
         self.last_pos = None
         self.dist_since_last_reward = 0.0
+        
+        # Reset lap timing
+        self.lap_times = []
+        self.best_lap = None
+        self.last_lap_start_time = 0.0
 
     def get_sensor_size(self) -> Tuple[int, int, int]:
         return self.camera_img_size
@@ -637,7 +667,10 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "missed_checkpoint": self.missed_checkpoint,
             "missed_checkpoint": self.missed_checkpoint,
             "dq": self.dq,
+            "dq": self.dq,
             "total_distance": self.total_distance,
+            "best_lap": self.best_lap,
+            "average_lap": sum(self.lap_times) / len(self.lap_times) if self.lap_times else None,
         }
 
         # Add the second image to the dict

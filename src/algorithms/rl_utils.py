@@ -202,6 +202,10 @@ def extract_episode_metrics(info, idx, done):
             
             if "lap_count" in env_info:
                 metrics["lap_count"] = env_info["lap_count"]
+            
+            # Distance traveled
+            if "total_distance" in env_info:
+                metrics["total_distance"] = env_info["total_distance"]
                 
         return metrics if metrics else None
     
@@ -258,6 +262,11 @@ def extract_episode_metrics(info, idx, done):
         if "lap_count" in info:
             lap_count = info["lap_count"][idx] if hasattr(info["lap_count"], "__getitem__") else info["lap_count"]
             metrics["lap_count"] = lap_count
+        
+        # Distance traveled
+        if "total_distance" in info:
+            dist_val = info["total_distance"][idx] if hasattr(info["total_distance"], "__getitem__") else info["total_distance"]
+            metrics["total_distance"] = dist_val
     
     return metrics if metrics else None
 
@@ -408,6 +417,7 @@ class EpisodeMetricsLogger:
         self.episode_hits = []
         self.episode_lap_times = []
         self.episode_lap_counts = []
+        self.episode_distances = []
         
         # Termination tracking
         self.episode_termination_reasons = []  # List of termination reason strings
@@ -453,6 +463,8 @@ class EpisodeMetricsLogger:
             self.episode_lap_times.append(metrics["lap_time"])
         if "lap_count" in metrics:
             self.episode_lap_counts.append(metrics["lap_count"])
+        if "total_distance" in metrics:
+            self.episode_distances.append(metrics["total_distance"])
     
     def get_metrics_dict(self):
         """Get all metrics as dictionary"""
@@ -465,6 +477,7 @@ class EpisodeMetricsLogger:
             "episode_hits": self.episode_hits,
             "episode_lap_times": self.episode_lap_times,
             "episode_lap_counts": self.episode_lap_counts,
+            "episode_distances": self.episode_distances,
         }
     
     def log_to_tensorboard(self, writer, global_step):
@@ -493,6 +506,10 @@ class EpisodeMetricsLogger:
         if len(self.episode_hits) > 0:
             hits_arr = np.array(self.episode_hits)
             writer.add_scalar("driving/collision_rate", np.mean(hits_arr), global_step)
+        
+        if len(self.episode_distances) > 0:
+            dist_arr = np.array(self.episode_distances)
+            writer.add_scalar("driving/distance", np.mean(dist_arr), global_step)
         
         # Lap Performance
         if len(self.episode_lap_times) > 0:
@@ -590,11 +607,16 @@ class EpisodeMetricsLogger:
             lines.append(f"  Reward: {np.mean(rewards_arr):.2f} ± {np.std(rewards_arr):.2f}")
             lines.append(f"  Length: {np.mean(lengths_arr):.1f}")
         
-        if len(self.episode_cte) > 0:
             cte_arr = np.array(self.episode_cte)
             speed_arr = np.array(self.episode_speed)
             hits_arr = np.array(self.episode_hits)
-            lines.append(f"  CTE: {np.mean(cte_arr):.3f} | Speed: {np.mean(speed_arr):.2f} | Collisions: {np.mean(hits_arr):.2%}")
+            
+            dist_str = ""
+            if len(self.episode_distances) > 0:
+                dist_arr = np.array(self.episode_distances)
+                dist_str = f" | Dist: {np.mean(dist_arr):.1f}m"
+            
+            lines.append(f"  CTE: {np.mean(cte_arr):.3f} | Speed: {np.mean(speed_arr):.2f} | Collisions: {np.mean(hits_arr):.2%}{dist_str}")
         
         # Termination summary
         total_episodes = sum(self.termination_counts.values())
