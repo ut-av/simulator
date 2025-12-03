@@ -7,9 +7,12 @@ Optimized for parallel environment execution
 
 import pathlib
 import sys
-sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+import os
 
 import argparse
+from datetime import datetime
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -64,6 +67,12 @@ class PPOConfig:
     random_spawn_max_cte_offset: float = 0.0  # Max lateral offset from centerline (meters)
     random_spawn_max_rotation_offset: float = 0.0  # Max rotation offset from tangent (degrees)
     
+    # Action Smoothing & Control
+    action_smoothing: bool = False # Enable action smoothing
+    action_smoothing_sigma: float = 1.0  # Sigma for Gaussian smoothing
+    action_history_len: int = 120  # Length of action history for smoothing
+    min_throttle: float = 0.0  # Minimum throttle value (if > 0)
+    
     # Reward Weights
     reward_speed_weight: float = 1.0  # Weight for speed reward component
     reward_centering_weight: float = 1.0  # Weight for centering reward component
@@ -98,6 +107,10 @@ class PPOConfig:
     
     # Device
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # Video Recording
+    record_videos: bool = False  # Enable video recording of episodes during training
+
     
     # Misc
     seed: int = 1
@@ -382,6 +395,14 @@ class PPOTrainer:
         env_config["centering_setpoints"] = (config.centering_setpoint_x, config.centering_setpoint_y)
         print(f"Centering reward setpoints: x={config.centering_setpoint_x}, y={config.centering_setpoint_y}")
         
+        # Add action smoothing and control parameters to env_config
+        env_config["action_smoothing"] = config.action_smoothing
+        env_config["action_smoothing_sigma"] = config.action_smoothing_sigma
+        env_config["action_history_len"] = config.action_history_len
+        env_config["min_throttle"] = config.min_throttle
+        print(f"Action smoothing: {config.action_smoothing} (sigma={config.action_smoothing_sigma}, history={config.action_history_len})")
+        print(f"Min throttle: {config.min_throttle}")
+        
         self.envs = make_vectorized_env(
             env_name=config.env_name,
             num_envs=config.num_envs,
@@ -434,6 +455,70 @@ class PPOTrainer:
             algorithm_name="PPO",
             port=config.start_port
         ) if config.visualize else None
+        
+        # Video Recording State
+        self.recording_state = "IDLE"  # IDLE, WAITING_FOR_EPISODE_START, RECORDING
+        self.current_video_filename = ""
+        self.video_dir = os.path.expanduser("~/roboracer_ws/simulator/videos")
+        if config.record_videos:
+            os.makedirs(self.video_dir, exist_ok=True)
+            print(f"Video recording enabled. Videos will be saved to: {self.video_dir}")
+
+    def send_env_message(self, env_idx, message):
+        """Send a message to a specific environment"""
+        try:
+            # Handle Serial backend
+            if hasattr(self.envs, 'envs'):
+                # Traverse wrappers to find DonkeyEnv
+                env = self.envs.envs[env_idx]
+                while hasattr(env, 'env'):
+                    if hasattr(env, 'viewer') and hasattr(env.viewer, 'handler'):
+                        break
+                    env = env.env
+                
+                if hasattr(env, 'viewer') and hasattr(env.viewer, 'handler'):
+                    env.viewer.handler.send_msg(message)
+                else:
+                    # Try one more level if it's a PufferEnv wrapper
+                    if hasattr(env, 'env_creator'):
+                         # This path is harder to reach dynamically without unwrapping
+                         pass
+                    # print(f"Warning: Could not find viewer/handler for env {env_idx}")
+                    pass
+            # Handle Multiprocessing backend (if supported by PufferLib/Gym)
+            elif hasattr(self.envs, 'call'):
+                # Attempt to call send_msg on the env
+                # This is backend-specific and might not work easily
+                pass
+        except Exception as e:
+            print(f"Error sending message to env {env_idx}: {e}")
+
+    def process_and_log_video(self, video_path, step):
+        """Read video file and log to TensorBoard"""
+        try:
+            import torchvision
+            # read_video returns (T, H, W, C) in [0, 255]
+            # add_video expects (N, T, C, H, W)
+            video, _, _ = torchvision.io.read_video(video_path, pts_unit='sec')
+            
+            if len(video) > 0:
+                # Permute to (T, C, H, W)
+                video = video.permute(0, 3, 1, 2)
+                # Add batch dimension (1, T, C, H, W)
+                video = video.unsqueeze(0)
+                
+                self.writer.add_video("recording/episode", video, step, fps=20)
+                self.writer.flush()
+                print(f"Logged video to TensorBoard: {video_path}")
+            else:
+                print(f"Warning: Empty video file {video_path}")
+                
+        except ImportError as e:
+            print(f"Warning: torchvision not installed or import failed: {e}")
+            print("To use video logging, please install torchvision and av: uv add torchvision av")
+        except Exception as e:
+            print(f"Error processing video {video_path}: {e}")
+
     
     def load_model(self, model_path: str):
         """Load a saved model checkpoint"""
@@ -520,8 +605,38 @@ class PPOTrainer:
                             self.writer.add_scalar("laps/lap_time", lap_metrics["lap_time"], self.global_step)
                             self.writer.flush()
                         self.last_seen_lap_counts[idx] = current_lap_count
+                        self.last_seen_lap_counts[idx] = current_lap_count
             
-            # Log episode metrics and reset lap count tracking on episode end
+            # Video Recording Logic (Env 0 only)
+            if self.config.record_videos:
+                if self.recording_state == "WAITING_FOR_EPISODE_START":
+                    if done[0]:
+                        # Start recording next episode
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"{self.video_dir}/video_update{self.update}_{timestamp}.mp4"
+                        # On Windows/Unity, path might need to be absolute or relative to project. 
+                        # We pass absolute path.
+                        self.current_video_filename = filename
+                        self.send_env_message(0, {"msg_type": "record_video", "filename": filename})
+                        self.recording_state = "RECORDING"
+                        print(f"Started recording video: {filename}")
+                
+                elif self.recording_state == "RECORDING":
+                    if done[0]:
+                        # Stop recording
+                        self.send_env_message(0, {"msg_type": "stop_recording"})
+                        self.recording_state = "PROCESSING"
+                        print(f"Stopped recording video. Processing...")
+                        
+                        # Process in background or main thread? Main thread for simplicity.
+                        # Wait a bit for file to be written?
+                        # Unity Recorder might take a moment.
+                        # We'll process it in the next update or immediately?
+                        # Let's try immediately but with a small delay if needed, 
+                        # or just log it.
+                        self.process_and_log_video(self.current_video_filename, self.global_step)
+                        self.recording_state = "IDLE"
+
             for idx, d in enumerate(done):
                 if d:
                     metrics = extract_episode_metrics(info, idx, d)
@@ -705,6 +820,12 @@ class PPOTrainer:
             # Print progress
             sps = int(self.global_step / (time.time() - start_time))
             print(f"Update {update}/{num_updates} | Step {self.global_step} | SPS: {sps}")
+            
+            # Trigger video recording for next episode
+            if self.config.record_videos and self.recording_state == "IDLE":
+                self.recording_state = "WAITING_FOR_EPISODE_START"
+                print("Video recording requested for next episode.")
+
             
             # Print episode metrics summary
             summary = self.episode_metrics.print_summary()
@@ -984,6 +1105,13 @@ def main():
     parser.add_argument("--random-spawn-max-cte-offset", type=float, default=1.0, help="max lateral offset from centerline (meters)")
     parser.add_argument("--random-spawn-max-rotation-offset", type=float, default=15.0, help="max rotation offset from tangent (degrees)")
     
+    # Action Smoothing & Control
+    parser.add_argument("--action-smoothing", action="store_true", default=False, help="enable action smoothing (default: False)")
+    parser.add_argument("--no-action-smoothing", dest="action_smoothing", action="store_false", help="disable action smoothing")
+    parser.add_argument("--action-smoothing-sigma", type=float, default=1.0, help="sigma for Gaussian smoothing")
+    parser.add_argument("--action-history-len", type=int, default=120, help="length of action history for smoothing")
+    parser.add_argument("--min-throttle", type=float, default=0.0, help="minimum throttle value")
+    
     # Reward Weights
     parser.add_argument("--reward-speed-weight", type=float, default=1.0, help="weight for speed reward component")
     parser.add_argument("--reward-centering-weight", type=float, default=1.0, help="weight for centering reward component")
@@ -1000,6 +1128,7 @@ def main():
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--visualize", action="store_true", help="enable pygame visualization window")
+    parser.add_argument("--record-videos", action="store_true", help="enable video recording of episodes")
     args = parser.parse_args()
     
     # In playback mode, default to 1 environment if not explicitly specified
@@ -1045,7 +1174,13 @@ def main():
         reward_lin_combination=args.reward_lin_combination,
         centering_setpoint_x=args.centering_setpoint_x,
         centering_setpoint_y=args.centering_setpoint_y,
+        record_videos=args.record_videos,
+        action_smoothing=args.action_smoothing,
+        action_smoothing_sigma=args.action_smoothing_sigma,
+        action_history_len=args.action_history_len,
+        min_throttle=args.min_throttle,
     )
+
     
     # Create trainer
     trainer = PPOTrainer(config)

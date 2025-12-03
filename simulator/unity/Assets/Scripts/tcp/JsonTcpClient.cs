@@ -17,7 +17,7 @@ namespace tk
         public tk.Dispatcher dispatcher;
 
         // Some messages need to be handled in the main thread. Unity object creation, etc..
-        public bool dispatchInMainThread = false;
+        public bool dispatchInMainThread = true;
 
         // A list of raw json strings received from network and waiting to dispatched locally.
         private List<string> recv_packets;

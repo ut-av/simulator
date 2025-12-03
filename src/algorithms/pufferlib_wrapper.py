@@ -162,6 +162,12 @@ def make_vectorized_env(
                     
                     # Centering setpoints
                     "centering_setpoints": env_config.get("centering_setpoints", (0.3, 0.8)),
+                    
+                    # Action Smoothing & Control
+                    "action_smoothing": env_config.get("action_smoothing", False),
+                    "action_smoothing_sigma": env_config.get("action_smoothing_sigma", 1.0),
+                    "action_history_len": env_config.get("action_history_len", 120),
+                    "min_throttle": env_config.get("min_throttle", 0.0),
                 }
                 # Use start_sim to launch simulator and create environment
                 env = start_sim(env_name=env_name, port=port, conf=conf)

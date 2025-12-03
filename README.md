@@ -158,6 +158,38 @@ The training logs comprehensive metrics to TensorBoard organized into several ca
 - **Completed laps = 0 for many updates**: Policy hasn't learned full track, may need more training or curriculum learning
 - **Low explained_variance (<0.5)**: Critic is struggling, may need more training epochs or larger network
 
+### Configuration
+
+#### Reward Function
+
+- **Cross Track Error (CTE)**
+
+You can try to adjust how the CTE error is calculated. Instead of just using the linear distance from the car's center to the centerline of the track, we can use a 5-point spline to define the reward. For example, if we set:
+
+```bash
+  --centering-setpoint-x 0.4 \
+  --centering-setpoint-y 0.7 \
+```
+
+This will keep the reward high close to the centerline of the track, but make it drop off more quickly as the car moves further away from the centerline.
+
+- **Reward Distance**
+
+`--reward-distance-weight` controls the weight of the distance reward. A higher weight will increase the reward when the car travels further down the track.
+
+- **Done Penalty**
+
+`--reward-done-penalty` controls the penalty when the car collides with the track or goes off the track. A higher penalty will make the car avoid collisions and going off the track.
+
+#### Performing Smoother Actions
+
+You can enable action smoothing to prevent the car from making jerky movements. This is useful for transferring the policy to the real world.
+
+- `--action-smoothing`: Enable action smoothing (default: False).
+- `--action-smoothing-sigma`: Controls the smoothness of the actions. A higher value will make the actions smoother. (default: 1.0)
+- `--action-history-len`: The number of past actions to use for smoothing. (default: 120)
+- `--min-throttle`: The minimum throttle value to apply. (default: 0.0)
+
 ### (deprecated) Stable Baselines3 Implementation
 
 ```bash

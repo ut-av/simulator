@@ -620,6 +620,10 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.best_lap = None
         self.last_lap_start_time = 0.0
 
+    def send_msg(self, msg: Dict[str, Any]) -> None:
+        if self.client:
+            self.client.send_now(msg)
+
     def get_sensor_size(self) -> Tuple[int, int, int]:
         return self.camera_img_size
 

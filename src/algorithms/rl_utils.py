@@ -341,6 +341,8 @@ def extract_step_data(info, idx):
         "missed_checkpoint": False,
         "dq": False,
         "reward_components": {},
+        "raw_action": None,
+        "smoothed_action": None,
     }
     
     # Handle list of dicts (PufferLib)
@@ -371,6 +373,10 @@ def extract_step_data(info, idx):
                 step_data["dq"] = env_info["dq"]
             if "reward_components" in env_info:
                 step_data["reward_components"] = env_info["reward_components"]
+            if "raw_action" in env_info:
+                step_data["raw_action"] = env_info["raw_action"]
+            if "smoothed_action" in env_info:
+                step_data["smoothed_action"] = env_info["smoothed_action"]
     
     # Handle dict (single env)
     elif isinstance(info, dict):
@@ -398,6 +404,10 @@ def extract_step_data(info, idx):
             step_data["dq"] = info["dq"]
         if "reward_components" in info:
             step_data["reward_components"] = info["reward_components"]
+        if "raw_action" in info:
+            step_data["raw_action"] = info["raw_action"]
+        if "smoothed_action" in info:
+            step_data["smoothed_action"] = info["smoothed_action"]
     
     return step_data
 
@@ -607,16 +617,16 @@ class EpisodeMetricsLogger:
             lines.append(f"  Reward: {np.mean(rewards_arr):.2f} ± {np.std(rewards_arr):.2f}")
             lines.append(f"  Length: {np.mean(lengths_arr):.1f}")
         
-            cte_arr = np.array(self.episode_cte)
-            speed_arr = np.array(self.episode_speed)
-            hits_arr = np.array(self.episode_hits)
+            cte_str = f"CTE: {np.mean(self.episode_cte):.3f}" if len(self.episode_cte) > 0 else "CTE: N/A"
+            speed_str = f"Speed: {np.mean(self.episode_speed):.2f}" if len(self.episode_speed) > 0 else "Speed: N/A"
+            hits_str = f"Collisions: {np.mean(self.episode_hits):.2%}" if len(self.episode_hits) > 0 else "Collisions: N/A"
             
             dist_str = ""
             if len(self.episode_distances) > 0:
                 dist_arr = np.array(self.episode_distances)
                 dist_str = f" | Dist: {np.mean(dist_arr):.1f}m"
             
-            lines.append(f"  CTE: {np.mean(cte_arr):.3f} | Speed: {np.mean(speed_arr):.2f} | Collisions: {np.mean(hits_arr):.2%}{dist_str}")
+            lines.append(f"  {cte_str} | {speed_str} | {hits_str}{dist_str}")
         
         # Termination summary
         total_episodes = sum(self.termination_counts.values())
@@ -835,8 +845,70 @@ class VisualizationWindow:
         throttle_clipped_text = self.font.render(f"{throttle_clipped_raw:.2f}", True, (255, 255, 255))
         self.screen.blit(throttle_clipped_text, (value_x, clipped_y + 30))
         
-        # Reward and diagnostic data
-        reward_y = clipped_y + 60
+        # Smoothed/Raw Actions (if available)
+        smoothed_y = clipped_y + 60
+        raw_action = diagnostic_data.get("raw_action")
+        smoothed_action = diagnostic_data.get("smoothed_action")
+        
+        if raw_action is not None and smoothed_action is not None:
+            # Raw Action (Blue)
+            raw_steer = float(raw_action[0])
+            raw_throttle = float(raw_action[1])
+            
+            # Smoothed Action (Purple)
+            smooth_steer = float(smoothed_action[0])
+            smooth_throttle = float(smoothed_action[1])
+            
+            # Draw Steer Comparison
+            steer_smooth_label = self.font.render("Steer (Sm/Raw):", True, (255, 255, 255))
+            self.screen.blit(steer_smooth_label, (label_x, smoothed_y))
+            pygame.draw.rect(self.screen, (255, 0, 0), (bar_x, smoothed_y, bar_width, bar_height), 2)
+            
+            center_x = bar_x + bar_width // 2
+            
+            # Draw Raw Steer (Blue outline/thin bar)
+            if raw_steer >= 0:
+                width = int(raw_steer * (bar_width // 2))
+                pygame.draw.rect(self.screen, (0, 100, 255), (center_x, smoothed_y + 5, width, bar_height - 10))
+            else:
+                width = int(abs(raw_steer) * (bar_width // 2))
+                pygame.draw.rect(self.screen, (0, 100, 255), (center_x - width, smoothed_y + 5, width, bar_height - 10))
+                
+            # Draw Smoothed Steer (Purple solid)
+            if smooth_steer >= 0:
+                width = int(smooth_steer * (bar_width // 2))
+                # Use alpha blending for overlay? Pygame rects don't support alpha directly without surface
+                # Just draw it slightly smaller or on top
+                pygame.draw.rect(self.screen, (200, 0, 255), (center_x, smoothed_y, width, 5)) # Top strip
+                pygame.draw.rect(self.screen, (200, 0, 255), (center_x, smoothed_y + bar_height - 5, width, 5)) # Bottom strip
+            else:
+                width = int(abs(smooth_steer) * (bar_width // 2))
+                pygame.draw.rect(self.screen, (200, 0, 255), (center_x - width, smoothed_y, width, 5))
+                pygame.draw.rect(self.screen, (200, 0, 255), (center_x - width, smoothed_y + bar_height - 5, width, 5))
+            
+            steer_smooth_text = self.font.render(f"{smooth_steer:.2f}/{raw_steer:.2f}", True, (255, 255, 255))
+            self.screen.blit(steer_smooth_text, (value_x, smoothed_y))
+            
+            # Draw Throttle Comparison
+            throttle_smooth_label = self.font.render("Throt (Sm/Raw):", True, (255, 255, 255))
+            self.screen.blit(throttle_smooth_label, (label_x, smoothed_y + 30))
+            pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, smoothed_y + 30, bar_width, bar_height), 2)
+            
+            # Draw Raw Throttle (Blue)
+            width = int(raw_throttle * bar_width)
+            pygame.draw.rect(self.screen, (0, 100, 255), (bar_x, smoothed_y + 35, width, bar_height - 10))
+            
+            # Draw Smoothed Throttle (Purple)
+            width = int(smooth_throttle * bar_width)
+            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 30, width, 5))
+            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 30 + bar_height - 5, width, 5))
+            
+            throttle_smooth_text = self.font.render(f"{smooth_throttle:.2f}/{raw_throttle:.2f}", True, (255, 255, 255))
+            self.screen.blit(throttle_smooth_text, (value_x, smoothed_y + 30))
+            
+            reward_y = smoothed_y + 60
+        else:
+            reward_y = clipped_y + 60
         reward_text = self.font.render(f"Reward: {reward_val:.2f}", True, (255, 255, 255))
         self.screen.blit(reward_text, (label_x, reward_y))
         

@@ -37,6 +37,7 @@ namespace UnityStandardAssets.Vehicles.Car
         [SerializeField] private float m_SlipLimit;
         [SerializeField] private float m_BrakeTorque;
         [Range(0, 1)] [SerializeField] private float m_NoThrottleBrakeFactor = 0.7f; // Braking force applied when no throttle is applied
+        [SerializeField] private float m_NoThrottleBrakeDelay = 0.2f; // Time in seconds to wait before applying drag brake
 
         private Quaternion[] m_WheelMeshLocalRotations;
         private Vector3 m_Prevpos, m_Pos;
@@ -47,6 +48,7 @@ namespace UnityStandardAssets.Vehicles.Car
         private float m_CurrentTorque;
         private Rigidbody m_Rigidbody;
         private const float k_ReversingThreshold = 0.01f;
+        private float m_TimeSinceZeroThrottle;
 
         public bool Skidding { get; private set; }
         public float BrakeInput { get; private set; }
@@ -226,13 +228,36 @@ namespace UnityStandardAssets.Vehicles.Car
                 {
                     // Apply foot brake if requested, or apply m_NoThrottleBrakeFactor braking when no throttle is applied
                     // This matches the physics of the real roboracer 
-                    float brakeFactor = footbrake > 0 ? footbrake : (accel == 0 ? m_NoThrottleBrakeFactor : 0f);
+                    float brakeFactor = 0f;
+                    if (footbrake > 0)
+                    {
+                        brakeFactor = footbrake;
+                        m_TimeSinceZeroThrottle = 0f;
+                    }
+                    else if (accel == 0)
+                    {
+                        m_TimeSinceZeroThrottle += Time.deltaTime;
+                        if (m_TimeSinceZeroThrottle > m_NoThrottleBrakeDelay)
+                        {
+                            brakeFactor = m_NoThrottleBrakeFactor;
+                        }
+                    }
+                    else
+                    {
+                        m_TimeSinceZeroThrottle = 0f;
+                    }
+
                     m_WheelColliders[i].brakeTorque = m_BrakeTorque*brakeFactor;
                 }
                 else if (footbrake > 0)
                 {
                     m_WheelColliders[i].brakeTorque = 0f;
                     m_WheelColliders[i].motorTorque = -m_ReverseTorque*footbrake;
+                    m_TimeSinceZeroThrottle = 0f;
+                }
+                else
+                {
+                    m_TimeSinceZeroThrottle = 0f;
                 }
             }
         }

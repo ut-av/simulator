@@ -26,6 +26,8 @@ namespace tk
         public Lidar lidar;
         public Odometry[] odom;
 
+        public RecorderController recorder;
+
         private tk.JsonTcpClient client;
         public Text ai_text;
 
@@ -56,8 +58,7 @@ namespace tk
         // is set to 0.0 so the client can step the simulation manually.
         bool bExitScene = false;
 
-        public float controlTimeOut = 0.01f;
-        public float timeoutBrakeVal = 0.70f;
+        public float controlTimeOut = 0.5f;
         private System.DateTime lastControlTime;
 
         public enum State
@@ -106,6 +107,8 @@ namespace tk
             client.dispatcher.Register("lidar_config", new tk.Delegates.OnMsgRecv(OnLidarConfig));
             client.dispatcher.Register("set_position", new tk.Delegates.OnMsgRecv(OnSetPosition));
             client.dispatcher.Register("node_position", new tk.Delegates.OnMsgRecv(OnNodePositionRecv));
+            client.dispatcher.Register("record_video", new tk.Delegates.OnMsgRecv(OnRecordVideo));
+            client.dispatcher.Register("stop_recording", new tk.Delegates.OnMsgRecv(OnStopRecording));
         }
 
         public void Start()
@@ -588,6 +591,43 @@ namespace tk
             Application.Quit();
         }
 
+        void OnRecordVideo(JSONObject json)
+        {
+            string filename = json.GetField("filename").str;
+            if (recorder == null)
+            {
+                recorder = gameObject.AddComponent<RecorderController>();
+            }
+            // Ensure we run this on the main thread
+            UnityMainThreadDispatcher.Instance().Enqueue(StartRecordingCoroutine(filename));
+        }
+
+        IEnumerator StartRecordingCoroutine(string filename)
+        {
+            if (recorder != null)
+            {
+                recorder.StartRecording(filename);
+            }
+            yield return null;
+        }
+
+        void OnStopRecording(JSONObject json)
+        {
+            if (recorder != null)
+            {
+                UnityMainThreadDispatcher.Instance().Enqueue(StopRecordingCoroutine());
+            }
+        }
+
+        IEnumerator StopRecordingCoroutine()
+        {
+            if (recorder != null)
+            {
+                recorder.StopRecording();
+            }
+            yield return null;
+        }
+
         void ApplyRandomSpawn()
         {
             Debug.Log($"[ApplyRandomSpawn] Starting - randomSpawnMaxCteOffset={randomSpawnMaxCteOffset}, randomSpawnMaxRotationOffset={randomSpawnMaxRotationOffset}");
@@ -714,7 +754,7 @@ namespace tk
                 if ((System.DateTime.Now - lastControlTime).TotalSeconds > controlTimeOut)
                 {
                     car.RequestThrottle(0.0f);
-                    car.RequestFootBrake(timeoutBrakeVal);
+                    car.RequestFootBrake(0.0f);
                 }
             }
         }

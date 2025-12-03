@@ -6,6 +6,7 @@ date: 2018-08-31
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections import deque
 
 import gym
 import numpy as np
@@ -37,7 +38,13 @@ def supply_defaults(conf: Dict[str, Any]) -> None:
         ("steer_limit", 1.0),
         ("throttle_min", 0.0),
         ("throttle_max", 1.0),
+        ("throttle_max", 1.0),
         ("max_speed", float('inf')),  # Maximum speed in m/s (default: no limit)
+        # Sigma represents the smoothing window in frames. To smooth over ~0.5 seconds (30 frames), you need a sigma around 10.0 - 20.0.
+        ("action_smoothing", True),
+        ("action_smoothing_sigma", 1.0),
+        ("action_history_len", 120),
+        ("min_throttle", 0.0),
     ]
 
     for key, val in defaults:
@@ -117,6 +124,27 @@ class DonkeyEnv(gym.Env):
         # wait until the car is loaded in the scene
         self.viewer.wait_until_loaded()
 
+        # Action Smoothing
+        self.action_smoothing = conf["action_smoothing"]
+        self.action_smoothing_sigma = conf["action_smoothing_sigma"]
+        self.action_history_len = conf["action_history_len"]
+        self.min_throttle = conf["min_throttle"]
+        self.action_history = deque(maxlen=self.action_history_len)
+        
+        if self.action_smoothing:
+            # Pre-compute Gaussian weights
+            # We want the most recent action (index N-1) to have the highest weight
+            # Weights are based on distance from the most recent action
+            # w_i = exp(- (N-1-i)^2 / (2 * sigma^2))
+            indices = np.arange(self.action_history_len)
+            # Distance from the end: 0 for last item, 1 for second to last, etc.
+            distances = (self.action_history_len - 1) - indices
+            self.smoothing_weights = np.exp(-0.5 * (distances / self.action_smoothing_sigma) ** 2)
+            # Normalize weights to sum to 1
+            self.smoothing_weights /= np.sum(self.smoothing_weights)
+            print(f"Action smoothing enabled: sigma={self.action_smoothing_sigma}, history_len={self.action_history_len}")
+            print(f"Smoothing weights: {self.smoothing_weights}")
+
     def __del__(self) -> None:
         self.close()
 
@@ -137,9 +165,53 @@ class DonkeyEnv(gym.Env):
         return [seed]
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        # Apply action smoothing if enabled
+        if self.action_smoothing:
+            self.action_history.append(action)
+            
+            # If we don't have enough history yet, just use available history
+            # We need to adjust weights dynamically or just pad?
+            # Simpler: just use what we have and re-normalize weights for the current length
+            current_len = len(self.action_history)
+            if current_len < self.action_history_len:
+                # Use subset of weights corresponding to the most recent 'current_len' items
+                # The weights are computed for positions 0..N-1. 
+                # The most recent is always at N-1 (highest weight).
+                # So we should take the last 'current_len' weights.
+                weights = self.smoothing_weights[-current_len:]
+                weights = weights / np.sum(weights)
+            else:
+                weights = self.smoothing_weights
+                
+            # Compute weighted average
+            # action_history is (T, A), weights is (T,)
+            # We want sum(w_i * a_i)
+            history_array = np.array(self.action_history)
+            smoothed_action = np.average(history_array, axis=0, weights=weights)
+            
+            # Debug: Print raw vs smoothed action
+            #print(f"Raw: {action} -> Smoothed: {smoothed_action}")
+            
+            # Update info with raw action for debugging if needed
+            # But we can't easily pass it out unless we modify the return signature or info dict
+            # For now, just use smoothed_action for the environment
+            action_to_take = smoothed_action
+            
+            # Apply minimum throttle rescaling
+            # If throttle > 0, map it to [min_throttle, 1.0]
+            if action_to_take[1] > 0.01:
+                action_to_take[1] = self.min_throttle + (1.0 - self.min_throttle) * action_to_take[1]
+        else:
+            action_to_take = action
+
         for _ in range(self.frame_skip):
-            self.viewer.take_action(action)
+            self.viewer.take_action(action_to_take)
             observation, reward, done, info = self.viewer.observe()
+            
+        if self.action_smoothing:
+            info["raw_action"] = action
+            info["smoothed_action"] = action_to_take
+            
         return observation, reward, done, info
 
     def reset(self) -> np.ndarray:
@@ -150,6 +222,11 @@ class DonkeyEnv(gym.Env):
         self.viewer.handler.send_control(0, 0, 1.0)
         time.sleep(0.1)
         observation, reward, done, info = self.viewer.observe()
+        
+        # Reset action history on reset
+        if hasattr(self, "action_history"):
+            self.action_history.clear()
+            
         return observation
 
     def render(self, mode: str = "human", close: bool = False) -> Optional[np.ndarray]:
