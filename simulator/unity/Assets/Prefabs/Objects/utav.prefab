@@ -1460,6 +1460,7 @@ Transform:
   - {fileID: 4624818990234384}
   - {fileID: 4941460906537534}
   - {fileID: 6629804867863394072}
+  - {fileID: 997195324652344906}
   - {fileID: 4304453298484376}
   - {fileID: 851915601251743748}
   - {fileID: 8281473344312031964}
@@ -3073,16 +3074,19 @@ MonoBehaviour:
   camSensor: {fileID: 114024581143197506}
   camSensorB: {fileID: 4720922310813553762}
   lidar: {fileID: 8710680940541415216}
+  hokuyo: {fileID: 6911556090884917726}
   odom:
   - {fileID: 171465705711246286}
   - {fileID: 3752837667694683536}
   - {fileID: 3463299510886559571}
   - {fileID: 2727778315529008430}
+  recorder: {fileID: 0}
   ai_text: {fileID: 0}
   limitFPS: 20
   timeSinceLastMoved: 0
   lastPos: {x: 0, y: 0, z: 0}
   lastDistanceTraveled: 0
+  controlTimeOut: 0.5
   state: 0
 --- !u!1 &1679626456172646
 GameObject:
@@ -3567,6 +3571,9 @@ MonoBehaviour:
   height: 120
   depth: 3
   img_enc: JPG
+  compressionQuality: 75
+  superSampling: 4
+  antiAliasing: 1
 --- !u!114 &114269225094589410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4980,7 +4987,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &4440154534749506797
 Transform:
   m_ObjectHideFlags: 0
@@ -5251,6 +5258,56 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &844036106557814962
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 997195324652344906}
+  - component: {fileID: 6911556090884917726}
+  m_Layer: 0
+  m_Name: Hokuyo10lxLidar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &997195324652344906
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 844036106557814962}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.015, y: 0.569, z: -0.195}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4114418689829218}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6911556090884917726
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 844036106557814962}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dad25a4140444fd178326d5ea5063aff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Hokuyo10lx
+  minAngle: -135
+  maxAngle: 135
+  angleIncrement: 0.25
+  maxRange: 30
+  minRange: 0.1
+  noise: 0.01
 --- !u!1 &983490660878802703
 GameObject:
   m_ObjectHideFlags: 0
@@ -6679,6 +6736,9 @@ MonoBehaviour:
   height: 120
   depth: 3
   img_enc: JPG
+  compressionQuality: 75
+  superSampling: 4
+  antiAliasing: 1
 --- !u!114 &8330842704525087435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -38400,6 +38460,9 @@ MonoBehaviour:
   height: 256
   depth: 3
   img_enc: JPG
+  compressionQuality: 75
+  superSampling: 4
+  antiAliasing: 1
 --- !u!4 &6629804867863394072 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 419338, guid: 8c8a8f77e8699403ab6c0d4b8fe24c16,

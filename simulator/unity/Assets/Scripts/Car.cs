@@ -104,6 +104,13 @@ public class Car : MonoBehaviour, ICar{
 	{
 		rb.position = pos;
 		rb.rotation = rot;
+		rb.linearVelocity = Vector3.zero;
+		rb.angularVelocity = Vector3.zero;
+		velocity = Vector3.zero;
+		acceleration = Vector3.zero;
+		requestTorque = 0f;
+		requestBrake = 1.0f;
+		requestSteering = 0f;
 
 		// Ignore collisions for 1 second after spawn/reset to allow car to settle
 		collisionGracePeriod = Time.time + 1.0f;
@@ -128,6 +135,8 @@ public class Car : MonoBehaviour, ICar{
 			numIter--;
 
 			rb.isKinematic = false;
+			rb.linearVelocity = Vector3.zero;
+			rb.angularVelocity = Vector3.zero;
 		}
 	}
 

@@ -410,6 +410,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
                     "rot_x",
                     "rot_y",
                     "rot_z",
+                    "super_sampling",
+                    "anti_aliasing",
                 ],
             )
             self.send_cam_config(**cam_config)
@@ -433,6 +435,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
                     "rot_x",
                     "rot_y",
                     "rot_z",
+                    "super_sampling",
+                    "anti_aliasing",
                 ],
             )
             self.send_cam_config(**cam_config_b, msg_type="cam_config_b")
@@ -480,6 +484,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
                 "rot_x",
                 "rot_y",
                 "rot_z",
+                "super_sampling",
+                "anti_aliasing",
             ],
         )
         if cam_config != {}:
@@ -1157,6 +1163,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
         rot_x: float = 0.0,
         rot_y: float = 0.0,
         rot_z: float = 0.0,
+        super_sampling: int = 4,
+        anti_aliasing: int = 1,
     ) -> None:
         """Camera config
         set any field to Zero to get the default camera setting.
@@ -1183,6 +1191,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
             "rot_x": str(rot_x),
             "rot_y": str(rot_y),
             "rot_z": str(rot_z),
+            "super_sampling": str(super_sampling),
+            "anti_aliasing": str(anti_aliasing),
         }
         self.blocking_send(msg)
         time.sleep(0.1)

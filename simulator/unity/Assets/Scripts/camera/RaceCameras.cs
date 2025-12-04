@@ -91,12 +91,12 @@ public class RaceCameras : MonoBehaviour, IWaitCarPath
             cmp.SetCameraTrigger(nodepos, node.rotation * Quaternion.AngleAxis(90, Vector3.up), new Vector3(0.1f, roadHeight, roadWidth));
             cmp.SetCam(midNodepos + midNode.rotation * (6f * sign * Vector3.right) + (cameraHeight * Vector3.up), midNodepos);
             cmp.index = i;
-            cmp.camera.cullingMask = cullMask;
+            cmp.GetComponent<Camera>().cullingMask = cullMask;
             raceCameras.Add(cmp);
         }
 
         // Enable first camera
-        raceCameras[0].camera.enabled = true;
+        raceCameras[0].GetComponent<Camera>().enabled = true;
 
         float coverage = GetCoverage(raceCameras.ToArray(), pathManager.carPath.centerNodes.ToArray(), nodeIndexes.ToArray());
         Debug.Log(string.Format("Race cameras coverage: {0}%", coverage));
@@ -107,7 +107,7 @@ public class RaceCameras : MonoBehaviour, IWaitCarPath
     {
         foreach (RaceCamera raceCamera in raceCameras)
         {
-            raceCamera.camera.enabled = enabled;
+            raceCamera.GetComponent<Camera>().enabled = enabled;
         }
     }
 
@@ -135,7 +135,7 @@ public class RaceCameras : MonoBehaviour, IWaitCarPath
             if (furtherID != 0)
             {
                 EnableCameras(false);
-                raceCameras[carProgress[furtherID]].camera.enabled = true;
+                raceCameras[carProgress[furtherID]].GetComponent<Camera>().enabled = true;
             }
         }
         else
@@ -162,7 +162,7 @@ public class RaceCameras : MonoBehaviour, IWaitCarPath
                 {
                     PathNode node = nodes[j % nodes.Length];
 
-                    bool isSeenByCamera = IsSeenByCamera(raceCams[i].camera, node.pos + node.rotation * (laneXOffset * Vector3.right));
+                    bool isSeenByCamera = IsSeenByCamera(raceCams[i].GetComponent<Camera>(), node.pos + node.rotation * (laneXOffset * Vector3.right));
                     if (isSeenByCamera) { count++; }
                 }
 

@@ -117,6 +117,7 @@ def launch_simulator(
     host: str = "0.0.0.0",
     logfile: str = "-",
     debug: bool = False,
+    log_filename_prefix: str = "sim_output",
 ) -> Optional[subprocess.Popen]:
     """
     Launch the DonkeySim simulator with a given scene.
@@ -138,6 +139,7 @@ def launch_simulator(
         host: Host address to bind to (default: 0.0.0.0)
         debug: Enable debug mode with logging (default: False)
         logfile: Log file path, use "-" for stdout (default: -)
+        log_filename_prefix: Prefix for the log filename (default: sim_output)
     
     Returns:
         subprocess.Popen object if successful, None if simulator path doesn't exist
@@ -212,7 +214,7 @@ def launch_simulator(
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     log_dir = os.path.join(project_root, "logs")
     os.makedirs(log_dir, exist_ok=True)
-    log_filename = os.path.join(log_dir, f"sim_output_{port}_{int(time.time())}.log")
+    log_filename = os.path.join(log_dir, f"{log_filename_prefix}_{port}_{int(time.time())}.log")
     print(f"Logging simulator output to: {log_filename}")
     
     log_file = open(log_filename, "w", encoding="utf-8")
@@ -311,8 +313,11 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
     if conf is not None and "exe_path" in conf:
         sim_path = conf["exe_path"]
     
+    # Get log filename prefix from conf if provided
+    log_filename_prefix = conf.get("log_filename_prefix", "sim_output") if conf else "sim_output"
+    
     # Launch simulator instance (this may reuse an existing simulator)
-    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port, debug=debug)
+    proc, port = launch_simulator(scene=scene, sim_path=sim_path, port=port, debug=debug, log_filename_prefix=log_filename_prefix)
     
     # Check if we already have an environment for this (env_name, port) combination
     # Do this after launch_simulator so we use the actual port
@@ -355,10 +360,11 @@ def start_sim(env_name: str = "donkey-circuit-launch-track-v0", port: int = 9091
     
     # Merge user-provided conf with defaults
     if conf is not None:
-        # Remove exe_path and policy_name from the user's conf before merging
+        # Remove exe_path, policy_name, and log_filename_prefix from the user's conf before merging
         # exe_path prevents DonkeyEnv from launching another simulator
         # policy_name is only used for naming, not a valid gym config parameter
-        conf_filtered = {k: v for k, v in conf.items() if k not in ["exe_path", "policy_name"]}
+        # log_filename_prefix is for sim_starter only
+        conf_filtered = {k: v for k, v in conf.items() if k not in ["exe_path", "policy_name", "log_filename_prefix"]}
         merged_conf = {**default_conf, **conf_filtered}
         # Ensure port is set correctly
         merged_conf["port"] = port

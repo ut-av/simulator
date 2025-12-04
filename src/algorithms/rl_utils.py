@@ -714,8 +714,8 @@ class VisualizationWindow:
     """Pygame visualization window for training"""
     def __init__(self, algorithm_name="RL", port=None):
         pygame.init()
-        self.font = pygame.font.SysFont(None, 24)
-        self.small_font = pygame.font.SysFont(None, 18)
+        self.font = pygame.font.SysFont(None, 20)
+        self.small_font = pygame.font.SysFont(None, 16)
         self.initialized = False
         self.reward_history = []
         self.max_history = 200
@@ -723,7 +723,7 @@ class VisualizationWindow:
         self.port = port
         
         # UI dimensions
-        self.ui_height = 540
+        self.ui_height = 640
         self.scaled_w = 0
         self.scaled_h = 0
         
@@ -764,7 +764,7 @@ class VisualizationWindow:
         
         # Setup window dimensions
         w, h = obs_img.shape[:2]
-        scale_factor = 4
+        scale_factor = 1
         self.scaled_w, self.scaled_h = w * scale_factor, h * scale_factor
         
         # UI layout: actions (150px) + diagnostics (150px) + component plots (240px)
@@ -788,12 +788,13 @@ class VisualizationWindow:
         pygame.draw.rect(self.screen, (0, 0, 0), (0, self.scaled_h, self.scaled_w, self.ui_height))
         
         # Draw UI elements
-        bar_y = self.scaled_h + 10
-        bar_width = 150
-        bar_height = 20
-        label_x = 10
-        bar_x = 180
-        value_x = bar_x + bar_width + 10
+        # Draw UI elements
+        bar_y = self.scaled_h + 5
+        bar_width = 100
+        bar_height = 15
+        label_x = 5
+        bar_x = 90
+        value_x = bar_x + bar_width + 5
         
         # Steer action bar
         steer_value_raw = float(action[0])
@@ -813,15 +814,15 @@ class VisualizationWindow:
         # Throttle action bar
         throttle_value_raw = float(action[1])
         throttle_label = self.font.render("Throttle:", True, (255, 255, 255))
-        self.screen.blit(throttle_label, (label_x, bar_y + 30))
-        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y + 30, bar_width, bar_height), 2)
+        self.screen.blit(throttle_label, (label_x, bar_y + 20))
+        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y + 20, bar_width, bar_height), 2)
         width = int(throttle_value_raw * bar_width)
-        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y + 30, width, bar_height))
+        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y + 20, width, bar_height))
         throttle_text = self.font.render(f"{throttle_value_raw:.2f}", True, (255, 255, 255))
-        self.screen.blit(throttle_text, (value_x, bar_y + 30))
+        self.screen.blit(throttle_text, (value_x, bar_y + 20))
         
         # Clipped actions
-        clipped_y = bar_y + 60
+        clipped_y = bar_y + 40
         steer_clipped_raw = float(clipped_action[0])
         steer_clipped_label = self.font.render("Steer (c):", True, (255, 255, 255))
         self.screen.blit(steer_clipped_label, (label_x, clipped_y))
@@ -838,15 +839,15 @@ class VisualizationWindow:
         
         throttle_clipped_raw = float(clipped_action[1])
         throttle_clipped_label = self.font.render("Throttle (c):", True, (255, 255, 255))
-        self.screen.blit(throttle_clipped_label, (label_x, clipped_y + 30))
-        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, clipped_y + 30, bar_width, bar_height), 2)
+        self.screen.blit(throttle_clipped_label, (label_x, clipped_y + 20))
+        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, clipped_y + 20, bar_width, bar_height), 2)
         width = int(throttle_clipped_raw * bar_width)
-        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, clipped_y + 30, width, bar_height))
+        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, clipped_y + 20, width, bar_height))
         throttle_clipped_text = self.font.render(f"{throttle_clipped_raw:.2f}", True, (255, 255, 255))
-        self.screen.blit(throttle_clipped_text, (value_x, clipped_y + 30))
+        self.screen.blit(throttle_clipped_text, (value_x, clipped_y + 20))
         
         # Smoothed/Raw Actions (if available)
-        smoothed_y = clipped_y + 60
+        smoothed_y = clipped_y + 40
         raw_action = diagnostic_data.get("raw_action")
         smoothed_action = diagnostic_data.get("smoothed_action")
         
@@ -891,24 +892,24 @@ class VisualizationWindow:
             
             # Draw Throttle Comparison
             throttle_smooth_label = self.font.render("Throt (Sm/Raw):", True, (255, 255, 255))
-            self.screen.blit(throttle_smooth_label, (label_x, smoothed_y + 30))
-            pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, smoothed_y + 30, bar_width, bar_height), 2)
+            self.screen.blit(throttle_smooth_label, (label_x, smoothed_y + 20))
+            pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, smoothed_y + 20, bar_width, bar_height), 2)
             
             # Draw Raw Throttle (Blue)
             width = int(raw_throttle * bar_width)
-            pygame.draw.rect(self.screen, (0, 100, 255), (bar_x, smoothed_y + 35, width, bar_height - 10))
+            pygame.draw.rect(self.screen, (0, 100, 255), (bar_x, smoothed_y + 25, width, bar_height - 10))
             
             # Draw Smoothed Throttle (Purple)
             width = int(smooth_throttle * bar_width)
-            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 30, width, 5))
-            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 30 + bar_height - 5, width, 5))
+            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 20, width, 5))
+            pygame.draw.rect(self.screen, (200, 0, 255), (bar_x, smoothed_y + 20 + bar_height - 5, width, 5))
             
             throttle_smooth_text = self.font.render(f"{smooth_throttle:.2f}/{raw_throttle:.2f}", True, (255, 255, 255))
-            self.screen.blit(throttle_smooth_text, (value_x, smoothed_y + 30))
+            self.screen.blit(throttle_smooth_text, (value_x, smoothed_y + 20))
             
-            reward_y = smoothed_y + 60
+            reward_y = smoothed_y + 45
         else:
-            reward_y = clipped_y + 60
+            reward_y = clipped_y + 45
         reward_text = self.font.render(f"Reward: {reward_val:.2f}", True, (255, 255, 255))
         self.screen.blit(reward_text, (label_x, reward_y))
         
@@ -925,7 +926,7 @@ class VisualizationWindow:
             # Calculate CTE ratio for proximity to termination
             cte_ratio = abs(cte_val) / max_cte_val if max_cte_val > 0 else 0.0
             
-            diag_text = f"CTE: {cte_val:.2f} | Speed: {speed_val:.2f} | FwdVel: {fwd_vel:.2f}"
+            diag_text = f"CTE: {cte_val:.2f} | Spd: {speed_val:.2f}"
             diag_surf = self.font.render(diag_text, True, (200, 200, 200))
             self.screen.blit(diag_surf, (label_x, diag_y))
             
@@ -935,7 +936,7 @@ class VisualizationWindow:
                 term_color = (255, 0, 0) if term_reason != "none" else (255, 255, 255)
                 term_text = f"Reason: {term_reason}"
                 term_surf = self.font.render(term_text, True, term_color)
-                self.screen.blit(term_surf, (label_x + 400, diag_y))
+                self.screen.blit(term_surf, (label_x, diag_y + 25))
             
             # Collision indicator
             if hit_val != "none":
@@ -943,7 +944,7 @@ class VisualizationWindow:
                 self.screen.blit(hit_surf, (label_x, diag_y + 25))
             
             # Termination condition proximity indicators
-            term_y = diag_y + 25
+            term_y = diag_y + 50
             
             # CTE proximity bar (shows how close to off-track termination)
             cte_label = self.font.render("CTE Proximity:", True, (255, 255, 255))
@@ -1026,7 +1027,7 @@ class VisualizationWindow:
                 ]
                 for i, text in enumerate(comp_texts):
                     comp_surf = self.font.render(text, True, (100, 200, 100))
-                    self.screen.blit(comp_surf, (label_x + (i % 2) * 200, comp_y + (i // 2) * 25))
+                    self.screen.blit(comp_surf, (label_x + (i % 2) * 160, comp_y + (i // 2) * 20))
             
             # Update component history
             for key in self.component_history.keys():
@@ -1065,11 +1066,11 @@ class VisualizationWindow:
         if len(self.reward_history) < 2:
             return
         
-        plot_width = 240
-        plot_height = 120
-        plot_x = screen_width - plot_width - 10
-        # Position at top of UI area (UI starts at screen_height - ui_height)
-        plot_y = screen_height - self.ui_height + 10
+        plot_width = 300
+        plot_height = 80
+        plot_x = 10
+        # Position below text area
+        plot_y = screen_height - self.ui_height + 310
         
         # Draw plot background
         pygame.draw.rect(self.screen, (40, 40, 40), (plot_x, plot_y, plot_width, plot_height))
@@ -1112,14 +1113,14 @@ class VisualizationWindow:
             current_components = {}
         
         # Plot configuration - bottom row dedicated to component plots
-        plot_width = 160
-        plot_height = 70
-        plot_spacing = 15
+        plot_width = 145
+        plot_height = 50
+        plot_spacing = 10
         # Center the plots horizontally
-        total_width_needed = 3 * plot_width + 2 * plot_spacing
+        total_width_needed = 2 * plot_width + 1 * plot_spacing
         start_x = (screen_width - total_width_needed) // 2
         # Position at very bottom with margin
-        start_y = screen_height - plot_height - 10
+        start_y = screen_height - plot_height - 5
         
         # Component configurations: (key, label, color)
         components = [
@@ -1137,9 +1138,10 @@ class VisualizationWindow:
             if len(history) < 2:
                 continue
             
-            # Calculate position (3 columns, 2 rows)
-            col = idx % 3
-            row = idx // 3
+            # Calculate position (2 columns, 3 rows)
+            col = idx % 2
+            row = idx // 2
+            plot_x = start_x + col * (plot_width + plot_spacing)
             plot_x = start_x + col * (plot_width + plot_spacing)
             plot_y = start_y - row * (plot_height + 40)
             
@@ -1185,7 +1187,7 @@ class VisualizationWindow:
             # Current value
             current_val = history[-1] if history else 0.0
             current_text = self.small_font.render(f"{current_val:.2f}", True, (200, 200, 200))
-            self.screen.blit(current_text, (plot_x + plot_width - 45, plot_y - 18))
+            self.screen.blit(current_text, (plot_x + plot_width - 45, plot_y + 2))
             
             # Min/max values (smaller font)
             if abs(min_val) > 0.01 or abs(max_val) > 0.01:

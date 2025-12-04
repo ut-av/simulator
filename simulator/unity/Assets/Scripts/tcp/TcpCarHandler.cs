@@ -62,6 +62,10 @@ namespace tk
 
         public float controlTimeOut = 0.5f;
         private System.DateTime lastControlTime;
+
+        public float noThrottleBrakeDelay = 0.2f;
+        public float noThrottleBrakeForce = 0.7f;
+        private float timeSinceZeroInput = 0.0f;
         
         private Vector3 initPosition;
         private Quaternion initRotation;
@@ -280,7 +284,17 @@ namespace tk
                 car.RequestThrottle(ai_throttle);
                 car.RequestSteering(ai_steering);
                 car.RequestThrottle(ai_throttle);
-                car.RequestFootBrake(ai_brake);
+
+                if (ai_throttle == 0.0f && ai_brake == 0.0f)
+                {
+                    // Do not reset timer or apply brake 0 here.
+                    // Let FixedUpdate handle the drag brake logic.
+                }
+                else
+                {
+                    timeSinceZeroInput = 0.0f;
+                    car.RequestFootBrake(ai_brake);
+                }
 
                 lastControlTime = System.DateTime.Now;
             }
@@ -422,7 +436,15 @@ namespace tk
 
         void OnCamConfig(JSONObject json)
         {
-            ParseCamConfig(json, 0);
+            Debug.Log("[TcpCarHandler] OnCamConfig received");
+            try
+            {
+                ParseCamConfig(json, 0);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[TcpCarHandler] Error in OnCamConfig: {e.Message}\n{e.StackTrace}");
+            }
         }
 
         void OnCamConfigB(JSONObject json)
@@ -450,16 +472,32 @@ namespace tk
             int img_quality = 75;
             if (json.HasField("img_quality"))
                 img_quality = int.Parse(json.GetField("img_quality").str);
+
+            int super_sampling = 4;
+            if (json.HasField("super_sampling"))
+                super_sampling = int.Parse(json.GetField("super_sampling").str);
+
+            int anti_aliasing = 1;
+            if (json.HasField("anti_aliasing"))
+                anti_aliasing = int.Parse(json.GetField("anti_aliasing").str);
             
-            Debug.Log($"[TcpCarHandler] CamConfig: quality={img_quality}, w={img_w}, h={img_h}");
+            Debug.Log($"[TcpCarHandler] CamConfig: quality={img_quality}, w={img_w}, h={img_h}, super_sampling={super_sampling}, anti_aliasing={anti_aliasing}");
 
             if (carObj != null)
-                UnityMainThreadDispatcher.Instance().Enqueue(SetCamConfig(iCamera, fov, offset_x, offset_y, offset_z, rot_x, rot_y, rot_z, img_w, img_h, img_d, img_enc, img_quality, fish_eye_x, fish_eye_y));
+            {
+                Debug.Log("[TcpCarHandler] Enqueueing SetCamConfig");
+                UnityMainThreadDispatcher.Instance().Enqueue(SetCamConfig(iCamera, fov, offset_x, offset_y, offset_z, rot_x, rot_y, rot_z, img_w, img_h, img_d, img_enc, img_quality, fish_eye_x, fish_eye_y, super_sampling, anti_aliasing));
+            }
+            else
+            {
+                Debug.LogError("[TcpCarHandler] carObj is null, cannot set cam config");
+            }
         }
 
         IEnumerator SetCamConfig(int iCamera, float fov, float offset_x, float offset_y, float offset_z, float rot_x,
-            float rot_y, float rot_z, int img_w, int img_h, int img_d, string img_enc, int img_quality, float fish_eye_x, float fish_eye_y)
+            float rot_y, float rot_z, int img_w, int img_h, int img_d, string img_enc, int img_quality, float fish_eye_x, float fish_eye_y, int super_sampling, int anti_aliasing)
         {
+            Debug.Log($"[TcpCarHandler] SetCamConfig coroutine started for camera {iCamera} with quality={img_quality}, w={img_w}, h={img_h}, super_sampling={super_sampling}, anti_aliasing={anti_aliasing}");
             CameraSensor cam = null;
 
             if (iCamera == 0)
@@ -476,7 +514,7 @@ namespace tk
 
             if (cam)
             {
-                cam.SetConfig(fov, offset_x, offset_y, offset_z, rot_x, rot_y, rot_z, img_w, img_h, img_d, img_enc, img_quality);
+                cam.SetConfig(fov, offset_x, offset_y, offset_z, rot_x, rot_y, rot_z, img_w, img_h, img_d, img_enc, img_quality, super_sampling, anti_aliasing);
 
                 Fisheye fe = cam.gameObject.GetComponent<Fisheye>();
 
@@ -793,8 +831,28 @@ namespace tk
 
                 if ((System.DateTime.Now - lastControlTime).TotalSeconds > controlTimeOut)
                 {
+                    ai_throttle = 0.0f;
+                    ai_brake = 0.0f;
                     car.RequestThrottle(0.0f);
-                    car.RequestFootBrake(0.0f);
+                    // car.RequestFootBrake(0.0f); // Let drag brake logic handle this
+                }
+
+                // Apply drag brake if no throttle/brake input
+                if (ai_throttle == 0.0f && ai_brake == 0.0f)
+                {
+                    timeSinceZeroInput += Time.fixedDeltaTime;
+                    if (timeSinceZeroInput > noThrottleBrakeDelay)
+                    {
+                        car.RequestFootBrake(noThrottleBrakeForce);
+                    }
+                    else
+                    {
+                        car.RequestFootBrake(0.0f);
+                    }
+                }
+                else
+                {
+                    timeSinceZeroInput = 0.0f;
                 }
             }
         }

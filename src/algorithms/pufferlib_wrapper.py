@@ -94,6 +94,15 @@ def make_donkey_env(env_name: str = "donkey-circuit-launch-track-v0", port: int 
             "guid": str(uuid.uuid4()),
             "max_cte": 10,
             "max_speed": 2.0,
+            "cam_config": {
+                "img_w": 320,
+                "img_h": 240,
+                "img_d": 3,
+                "img_enc": "JPG",
+                "img_quality": 100,
+                "super_sampling": 4,
+                "anti_aliasing": 4,
+            },
         }
         # Use start_sim to launch simulator and create environment
         env = start_sim(env_name=env_name, port=port, conf=conf)
@@ -166,6 +175,7 @@ def make_vectorized_env(
                     
                     # Playback mode
                     "playback": env_config.get("playback", False),
+                    "log_filename_prefix": "playback" if env_config.get("playback", False) else "sim_output",
                     
                     # Centering setpoints
                     "centering_setpoints": env_config.get("centering_setpoints", (0.3, 0.8)),
@@ -175,6 +185,16 @@ def make_vectorized_env(
                     "action_smoothing_sigma": env_config.get("action_smoothing_sigma", 1.0),
                     "action_history_len": env_config.get("action_history_len", 120),
                     "min_throttle": env_config.get("min_throttle", 0.0),
+                    
+                    "cam_config": {
+                        "img_w": env_config.get("img_w", 320),
+                        "img_h": env_config.get("img_h", 240),
+                        "img_d": 3,
+                        "img_enc": "JPG",
+                        "img_quality": 100,
+                        "super_sampling": env_config.get("super_sampling", 4),
+                        "anti_aliasing": env_config.get("anti_aliasing", 4),
+                    },
                 }
                 # Use start_sim to launch simulator and create environment
                 env = start_sim(env_name=env_name, port=port, conf=conf)

@@ -113,7 +113,10 @@ class DonkeyEnv(gym.Env):
         )
 
         # camera sensor data
-        self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, self.viewer.get_sensor_size(), dtype=np.uint8)
+        if "cam_config" in conf and "img_w" in conf["cam_config"] and "img_h" in conf["cam_config"]:
+            self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, (conf["cam_config"]["img_h"], conf["cam_config"]["img_w"], 3), dtype=np.uint8)
+        else:
+            self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, self.viewer.get_sensor_size(), dtype=np.uint8)
 
         # simulation related variables.
         self.seed()

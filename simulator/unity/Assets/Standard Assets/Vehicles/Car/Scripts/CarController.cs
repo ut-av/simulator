@@ -226,38 +226,12 @@ namespace UnityStandardAssets.Vehicles.Car
             {
                 if (CurrentSpeed > 5 && Vector3.Angle(transform.forward, m_Rigidbody.linearVelocity) < 50f)
                 {
-                    // Apply foot brake if requested, or apply m_NoThrottleBrakeFactor braking when no throttle is applied
-                    // This matches the physics of the real roboracer 
-                    float brakeFactor = 0f;
-                    if (footbrake > 0)
-                    {
-                        brakeFactor = footbrake;
-                        m_TimeSinceZeroThrottle = 0f;
-                    }
-                    else if (accel == 0)
-                    {
-                        m_TimeSinceZeroThrottle += Time.deltaTime;
-                        if (m_TimeSinceZeroThrottle > m_NoThrottleBrakeDelay)
-                        {
-                            brakeFactor = m_NoThrottleBrakeFactor;
-                        }
-                    }
-                    else
-                    {
-                        m_TimeSinceZeroThrottle = 0f;
-                    }
-
-                    m_WheelColliders[i].brakeTorque = m_BrakeTorque*brakeFactor;
+                    m_WheelColliders[i].brakeTorque = m_BrakeTorque*footbrake;
                 }
                 else if (footbrake > 0)
                 {
                     m_WheelColliders[i].brakeTorque = 0f;
                     m_WheelColliders[i].motorTorque = -m_ReverseTorque*footbrake;
-                    m_TimeSinceZeroThrottle = 0f;
-                }
-                else
-                {
-                    m_TimeSinceZeroThrottle = 0f;
                 }
             }
         }

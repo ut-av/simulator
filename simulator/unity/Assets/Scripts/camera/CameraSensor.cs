@@ -15,9 +15,16 @@ public class CameraSensor : MonoBehaviour {
 	Rect ImageRect;
 
 	public int compressionQuality = 75;
+	public int superSampling = 4;
+	public int antiAliasing = 1;
 
-	public void SetConfig(float fov, float offset_x, float offset_y, float offset_z, float rot_x, float rot_y, float rot_z, int img_w, int img_h, int img_d, string _img_enc, int _compressionQuality)
+	public void SetConfig(float fov, float offset_x, float offset_y, float offset_z, float rot_x, float rot_y, float rot_z, int img_w, int img_h, int img_d, string _img_enc, int _compressionQuality, int _superSampling, int _antiAliasing)
 	{
+		Debug.Log($"[CameraSensor] SetConfig: quality={_compressionQuality}, w={img_w}, h={img_h}, super_sampling={_superSampling}, anti_aliasing={_antiAliasing}");
+		compressionQuality = _compressionQuality;
+		superSampling = _superSampling;
+		antiAliasing = _antiAliasing;
+
 		if (img_d != 0)
 		{
 			depth = img_d;
@@ -44,14 +51,19 @@ public class CameraSensor : MonoBehaviour {
 
 		if(fov != 0.0f)
 			sensorCam.fieldOfView = fov;
-
-		compressionQuality = _compressionQuality;
 	}
 
 	void Awake()
 	{
+		if (tex != null)
+			Destroy(tex);
+		if (ren != null)
+			ren.Release();
+
+		Debug.Log($"[CameraSensor] Initialized: Res={width}x{height}, SuperSampling={superSampling}x, AA={antiAliasing}x, Compression={compressionQuality}");
 		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
-		ren = new RenderTexture(width, height, 16, RenderTextureFormat.ARGB32);
+		ren = new RenderTexture(width * superSampling, height * superSampling, 16, RenderTextureFormat.ARGB32);
+		ren.antiAliasing = antiAliasing;
 		sensorCam.targetTexture = ren;
 	}
 
@@ -62,7 +74,18 @@ public class CameraSensor : MonoBehaviour {
 
 		sensorCam.Render();
 
-		tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+		if (superSampling > 1)
+		{
+			RenderTexture finalRen = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+			Graphics.Blit(ren, finalRen);
+			RenderTexture.active = finalRen;
+			tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+			RenderTexture.ReleaseTemporary(finalRen);
+		}
+		else
+		{
+			tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+		}
 
 		if(depth == 1)
 		{

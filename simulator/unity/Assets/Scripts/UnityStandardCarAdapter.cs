@@ -84,6 +84,10 @@ public class UnityStandardCarAdapter : MonoBehaviour, ICar {
 	{
 		rb.position = pos;
 		rb.rotation = rot;
+		throttle = 0f;
+		footBrake = 1.0f;
+		handBrake = 1.0f;
+		steering = 0f;
 
 		//just setting it once doesn't seem to work. Try setting it multiple times..
 		StartCoroutine(KeepSetting(pos, rot, 10));

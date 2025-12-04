@@ -6,16 +6,14 @@ public class RaceCamera : MonoBehaviour
 {
     RaceCameras raceCameras;
     public CameraTrigger cameraTrigger;
-    public new Camera camera;
     public int index;
 
     void Awake()
     {
         GameObject goCamChild = new GameObject(string.Format("Camera"));
         goCamChild.transform.SetParent(transform);
-        camera = goCamChild.AddComponent<Camera>();
-        camera.enabled = false;
-        camera.fieldOfView = 90;
+        GetComponent<Camera>().enabled = false;
+        GetComponent<Camera>().fieldOfView = 90;
 
         GameObject goTriggerChild = new GameObject(string.Format("Cam Trigger"));
         goTriggerChild.transform.SetParent(transform);
@@ -30,13 +28,13 @@ public class RaceCamera : MonoBehaviour
     }
     public void SetCam(Vector3 position, Vector3 lookAt)
     {
-        camera.transform.position = position;
-        camera.transform.rotation = Quaternion.LookRotation(lookAt - position, Vector3.up);
+        GetComponent<Camera>().transform.position = position;
+        GetComponent<Camera>().transform.rotation = Quaternion.LookRotation(lookAt - position, Vector3.up);
     }
 
     public void CameraTriggered(Collider col)
     {
-        raceCameras.CameraTriggered(col, camera, index);
+        raceCameras.CameraTriggered(col, GetComponent<Camera>(), index);
     }
 
 }
