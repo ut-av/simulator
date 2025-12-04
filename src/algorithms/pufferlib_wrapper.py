@@ -159,6 +159,12 @@ def make_vectorized_env(
                     # Reward weights
                     "reward_speed_weight": env_config.get("reward_speed_weight", 1.0),
                     "reward_centering_weight": env_config.get("reward_centering_weight", 1.0),
+                    "reward_distance_weight": env_config.get("reward_distance_weight", 0.0),
+                    "reward_done_penalty": env_config.get("reward_done_penalty", -1.0),
+                    "reward_lin_combination": env_config.get("reward_lin_combination", False),
+                    
+                    # Playback mode
+                    "playback": env_config.get("playback", False),
                     
                     # Centering setpoints
                     "centering_setpoints": env_config.get("centering_setpoints", (0.3, 0.8)),

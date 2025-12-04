@@ -104,7 +104,6 @@ class PPOConfig:
     # Logging
     log_dir: str = "./output/tensorboard"
     model_dir: str = "./output/models"
-    save_model_freq: int = 10  # Save every N updates
     
     # Device
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -403,6 +402,9 @@ class PPOTrainer:
         env_config["min_throttle"] = config.min_throttle
         print(f"Action smoothing: {config.action_smoothing} (sigma={config.action_smoothing_sigma}, history={config.action_history_len})")
         print(f"Min throttle: {config.min_throttle}")
+        
+        # Add playback mode to env_config
+        env_config["playback"] = config.playback
         
         self.envs = make_vectorized_env(
             env_name=config.env_name,
@@ -826,10 +828,13 @@ class PPOTrainer:
         print(f"Model checkpoints: {self.model_dir}")
         print(f"{'='*60}\n")
         
+        if self.config.model_path:
+            self.load_model(self.config.model_path)
+            
         start_time = time.time()
         num_updates = self.config.total_timesteps // self.batch_size
         
-        for update in range(1, num_updates + 1):
+        for update in range(self.update + 1, num_updates + 1):
             self.update = update
             
             # Collect rollouts
@@ -903,15 +908,15 @@ class PPOTrainer:
             self.episode_metrics.reset()
             
             # Save model
-            if update % self.config.save_model_freq == 0:
-                model_path = f"{self.model_dir}/ppo_donkey_update{update}.pt"
-                torch.save({
-                    "update": update,
-                    "global_step": self.global_step,
-                    "model_state_dict": self.agent.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
-                }, model_path)
-                print(f"  Saved model to {model_path}")
+            # if update % self.config.save_model_freq == 0:
+            #     model_path = f"{self.model_dir}/ppo_donkey_update{update}.pt"
+            #     torch.save({
+            #         "update": update,
+            #         "global_step": self.global_step,
+            #         "model_state_dict": self.agent.state_dict(),
+            #         "optimizer_state_dict": self.optimizer.state_dict(),
+            #     }, model_path)
+            #     print(f"  Saved model to {model_path}")
         
         # Save final model
         final_model_path = f"{self.model_dir}/ppo_donkey_final.pt"
@@ -1023,9 +1028,12 @@ class PPOTrainer:
                                 print(f"  Avg Speed: {metrics['speed']:.2f}")
                             if 'forward_vel' in metrics:
                                 print(f"  Avg Forward Velocity: {metrics['forward_vel']:.2f}")
-                            if 'hit' in metrics:
-                                collision_status = "Yes" if metrics['hit'] > 0 else "No"
-                                print(f"  Collision: {collision_status}")
+                                if 'hit' in metrics:
+                                    collision_status = "Yes" if metrics['hit'] > 0 else "No"
+                                    print(f"  Collision: {collision_status}")
+                                if 'off_track' in metrics:
+                                    off_track_status = "Yes" if metrics['off_track'] else "No"
+                                    print(f"  Off-Track: {off_track_status}")
                             
                             print(f"{'='*60}\n")
                             
@@ -1120,6 +1128,22 @@ class PPOTrainer:
             print(f"  Collision Rate: {collision_rate:.1f}%")
             print(f"  Episodes with Collisions: {num_collisions}/{len(hits)}")
         
+        # Off-Track Statistics
+        if 'episode_termination_reasons' in metrics_dict:
+            reasons = metrics_dict['episode_termination_reasons']
+            # Count off_track occurrences (either as boolean flag or termination reason)
+            # Note: metrics_dict doesn't explicitly store 'episode_off_track' list in EpisodeMetricsLogger
+            # but we can infer from termination reasons if that's how it's tracked, 
+            # OR we should update EpisodeMetricsLogger to store off_track explicitly if needed.
+            # Looking at EpisodeMetricsLogger, it stores 'episode_termination_reasons'.
+            
+            num_off_track = reasons.count("off_track")
+            off_track_rate = (num_off_track / len(reasons)) * 100 if len(reasons) > 0 else 0.0
+            
+            print(f"\nOff-Track Statistics:")
+            print(f"  Off-Track Rate: {off_track_rate:.1f}%")
+            print(f"  Episodes Off-Track: {num_off_track}/{len(reasons)}")
+        
         print(f"{'='*60}\n")
         
         # Cleanup
@@ -1133,7 +1157,7 @@ def main():
     
     # Mode selection
     parser.add_argument("--playback", action="store_true", help="run playback mode instead of training")
-    parser.add_argument("--model-path", type=str, help="path to saved model checkpoint (required for playback)")
+    parser.add_argument("--model-path", type=str, help="path to saved model checkpoint (required for playback, optional for resuming training)")
     parser.add_argument("--num-episodes", type=int, default=10, help="number of episodes to run in playback mode")
     parser.add_argument("--deterministic", action="store_true", default=True, help="use deterministic policy (mean action) in playback")
     parser.add_argument("--stochastic", dest="deterministic", action="store_false", help="use stochastic policy (sample actions) in playback")
@@ -1179,6 +1203,10 @@ def main():
     parser.add_argument("--total-timesteps", type=int, default=1000000)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--num-steps", type=int, default=2048)
+    
+    # Logging
+    parser.add_argument("--log-dir", type=str, default="./output/tensorboard", help="tensorboard log directory")
+    parser.add_argument("--model-dir", type=str, default="./output/models", help="model checkpoint directory")
     
     # Misc
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
@@ -1235,6 +1263,8 @@ def main():
         action_smoothing_sigma=args.action_smoothing_sigma,
         action_history_len=args.action_history_len,
         min_throttle=args.min_throttle,
+        log_dir=args.log_dir,
+        model_dir=args.model_dir,
     )
 
     

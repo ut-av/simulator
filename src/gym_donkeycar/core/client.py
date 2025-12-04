@@ -14,7 +14,7 @@ import logging
 import select
 import socket
 import time
-from threading import Thread
+import threading
 from typing import Any, Dict
 
 from .util import replace_float_notation
@@ -53,7 +53,7 @@ class SDClient:
 
         # time.sleep(pause_on_create)
         self.do_process_msgs = True
-        self.th = Thread(target=self.proc_msg, args=(self.s,), daemon=True)
+        self.th = threading.Thread(target=self.proc_msg, args=(self.s,), daemon=True)
         self.th.start()
 
     def send(self, m: str) -> None:
@@ -61,7 +61,11 @@ class SDClient:
 
     def send_now(self, msg: str) -> None:
         logger.debug("send_now:" + msg)
-        self.s.sendall(msg.encode("utf-8"))
+        try:
+            self.s.sendall(msg.encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            logger.error(f"Error sending message: {e}")
+            self.aborted = True
 
     def on_msg_recv(self, j: Dict[str, Any]) -> None:
         logger.debug("got:" + j["msg_type"])
@@ -70,7 +74,7 @@ class SDClient:
         # signal proc_msg loop to stop, then wait for thread to finish
         # close socket
         self.do_process_msgs = False
-        if self.th is not None:
+        if self.th is not None and self.th != threading.current_thread():
             self.th.join()
         if self.s is not None:
             self.s.close()

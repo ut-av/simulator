@@ -298,7 +298,13 @@ class DonkeyUnitySimHandler(IMesgHandler):
             self.last_lap_time = potential_lap_time
             self.current_lap_time = time_at_crossing
             self.lap_count += 1
-            lap_msg = f"New lap time (finish line): {round(self.last_lap_time, 2)} seconds"
+            
+            # Store lap time
+            self.lap_times.append(self.last_lap_time)
+            if self.best_lap is None or self.last_lap_time < self.best_lap:
+                self.best_lap = self.last_lap_time
+                
+            lap_msg = f"New lap time (finish line): {round(self.last_lap_time, 2)} seconds (Best: {self.best_lap:.2f}s)"
             logger.info(lap_msg)
 
     def check_proximity_lap_completion(self) -> None:
@@ -356,7 +362,9 @@ class DonkeyUnitySimHandler(IMesgHandler):
                     if self.best_lap is None or lap_duration < self.best_lap:
                         self.best_lap = lap_duration
                     
-                    logger.info(f"Lap {len(self.lap_times)} completed: {lap_duration:.2f}s (Best: {self.best_lap:.2f}s)")
+                    # Only log proximity lap times if NOT in playback mode
+                    if not self.conf.get("playback", False):
+                        logger.info(f"Lap {len(self.lap_times)} completed: {lap_duration:.2f}s (Best: {self.best_lap:.2f}s)")
                 
                 self.last_lap_start_time = current_time
                 #logger.info(f"Lap completed (proximity): count = {self.lap_count_proximity}, distance = {distance_to_start:.2f}m, yaw_diff = {yaw_diff:.1f}°")
