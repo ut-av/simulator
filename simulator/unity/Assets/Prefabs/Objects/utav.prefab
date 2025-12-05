@@ -3087,6 +3087,8 @@ MonoBehaviour:
   lastPos: {x: 0, y: 0, z: 0}
   lastDistanceTraveled: 0
   controlTimeOut: 0.5
+  noThrottleBrakeDelay: 0.2
+  noThrottleBrakeForce: 0.7
   state: 0
 --- !u!1 &1679626456172646
 GameObject:
@@ -5308,6 +5310,8 @@ MonoBehaviour:
   maxRange: 30
   minRange: 0.1
   noise: 0.01
+  visualizeScan: 0
+  logScanSent: 0
 --- !u!1 &983490660878802703
 GameObject:
   m_ObjectHideFlags: 0
