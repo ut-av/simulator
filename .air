@@ -1,0 +1,7 @@
+mounts:
+  # roboracer_ws/scripts/vnc, which the plans' vnc pane runs in this package.
+  - ~/roboracer_ws/scripts
+  # Shared X11 socket dir so the simulator and its visualization window can
+  # reach the vnc pane's display :9 (a separate container of this package).
+  # See roboracer_ws/packages/vnc/.air.
+  - /tmp/.X11-unix

@@ -1,0 +1,26 @@
+kind: package
+name: simulator
+# The Unity simulator binary (simulator/build/linux/sim.x86_64) only exists for
+# x86_64, so this package runs on a lab machine or desktop, never on a car. It
+# overrides the project's Jetson-only base image (roboracer/l4t-jazzy) with
+# airfield's own x86_64 ROS image, which also has the X/GL libraries Unity needs.
+base_image: osrf/ros:jazzy-desktop
+# The project sets false because its base image is built on each car; this one
+# comes from Docker Hub.
+pull_base_image: true
+# The Python stack (torch, pufferlib, gym, ...) is not listed here: it lives in
+# pyproject.toml/uv.lock, and `uv sync` installs it into .venv in the mounted
+# source tree, so it survives the ephemeral container. PyPI's x86_64 torch
+# wheels already include CUDA. `uv` is a project recipe in
+# roboracer_ws/dependencies/xplatform/uv.yaml, which also brings the curl and
+# unzip that scripts/download_sim.sh needs.
+#
+# `vnc` puts TurboVNC in this image too, so plans run the vnc pane with
+# `package: simulator`: roboracer_ws's own vnc package inherits the project's
+# Jetson base image and can't be built on x86_64.
+dependencies:
+  - uv
+  - vnc
+# COLCON_IGNORE keeps colcon out of the Python sources; nothing here is built.
+source_path: .
+ros_distro: jazzy
