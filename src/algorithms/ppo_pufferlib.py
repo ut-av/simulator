@@ -474,7 +474,7 @@ class PPOTrainer:
         # Video Recording State
         self.recording_state = "IDLE"  # IDLE, WAITING_FOR_EPISODE_START, RECORDING
         self.current_video_filename = ""
-        self.video_dir = os.path.expanduser(f"~/roboracer_ws/simulator/output/videos/{self.run_id}")
+        self.video_dir = f"./output/videos/{self.run_id}"
         self.recording_trigger_update = 0
         self.recording_metadata = ""
         if config.record_videos:
