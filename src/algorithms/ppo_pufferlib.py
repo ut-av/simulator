@@ -1207,6 +1207,8 @@ def main():
     # Reward Weights
     parser.add_argument("--reward-speed-weight", type=float, default=1.0, help="weight for speed reward component")
     parser.add_argument("--reward-centering-weight", type=float, default=1.0, help="weight for centering reward component")
+    parser.add_argument("--reward-distance-weight", type=float, default=0.0, help="weight for distance-travelled reward component")
+    parser.add_argument("--reward-done-penalty", type=float, default=-1.0, help="reward when the episode ends from a crash or leaving the track")
     parser.add_argument("--reward-lin-combination", action="store_true", help="use linear combination of reward terms")
     parser.add_argument("--centering-setpoint-x", type=float, default=0.3, help="x-position for spline points 1 and 3 (0.0 to 1.0)")
     parser.add_argument("--centering-setpoint-y", type=float, default=0.8, help="y-value for spline points 1 and 3 (0.0 to 1.0)")
@@ -1267,6 +1269,8 @@ def main():
         random_spawn_max_rotation_offset=args.random_spawn_max_rotation_offset,
         reward_speed_weight=args.reward_speed_weight,
         reward_centering_weight=args.reward_centering_weight,
+        reward_distance_weight=args.reward_distance_weight,
+        reward_done_penalty=args.reward_done_penalty,
         reward_lin_combination=args.reward_lin_combination,
         centering_setpoint_x=args.centering_setpoint_x,
         centering_setpoint_y=args.centering_setpoint_y,
